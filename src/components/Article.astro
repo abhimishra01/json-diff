@@ -1,5 +1,7 @@
 ---
 // SEO article below the tool. Plain, short sentences. Speed numbers come from our own tests.
+// Each example button loads a pair of documents and sets the options for that case (see src/lib/jd/scenarios.js).
+// The section ids match the example ids, so the address #ignore-array-order opens that example.
 ---
 <section aria-labelledby="about-tool" class="mx-auto max-w-5xl px-4 pt-16">
   <article class="prose-site">
@@ -7,13 +9,28 @@
     <p>A JSON diff checker compares two JSON documents and lists what changed. This one shows each change with its path, for example <code>$.user.email</code>, the old value and the new value. It compares the data and ignores the layout.</p>
     <p>A plain text diff does not work well for JSON. Two files can hold the same data with the keys in another order, or one file can sit on a single line. A text diff then marks every line as changed. Here, only real changes show up.</p>
 
+    <h2 id="exact-numbers">Exact numbers: JSON compare that does not round</h2>
+    <p>Many online JSON compare tools read every number as a floating point value. A number with 17 or more digits then loses its last digits. Two different ids can look the same. In our test on October 21, 2026, three of four popular tools called the two numbers below identical, and one of them rewrote both as <code>12345678901234567000</code>.</p>
+    <div class="proof">
+      <table class="wide">
+        <thead><tr><th>Document</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Original</td><td><code>12345678901234567890</code></td></tr>
+          <tr><td>Changed</td><td><code>12345678901234567891</code></td></tr>
+          <tr><td>This tool</td><td>1 change. Numbers keep every digit.</td></tr>
+        </tbody>
+      </table>
+      <button type="button" class="btn" data-scenario="exact-numbers">Try the 20-digit example</button>
+    </div>
+    <p>Numbers still compare by value, so <code>1.0</code>, <code>1</code> and <code>1e0</code> are equal. The example also holds <code>10.5</code> and <code>10.50</code>. They match.</p>
+
     <h2>How to compare two JSON files</h2>
     <ol>
       <li>Paste the first JSON into <strong>Original</strong> and the second into <strong>Changed</strong>. You can also drop a file on a box or press <strong>Open</strong>.</li>
       <li>Read the list of changes. Each row shows the kind of change, the path, and the values. The list updates while you type.</li>
       <li>Set options if you need them: how to match arrays, which fields to ignore, and the rules for numbers and text. Options that are on show as chips under the toolbar.</li>
     </ol>
-    <p>Press Ctrl or Cmd and Enter to compare at once. The <strong>Sample</strong> button loads a pair that shows every kind of change.</p>
+    <p>Press Ctrl or Cmd and Enter to compare at once. The <strong>Sample</strong> button loads a pair that shows every kind of change. Use <strong>Copy share link</strong> to send a diff to a colleague. The link holds both documents, so share it only with people who may see them.</p>
 
     <h2>What it ignores and what it reports</h2>
     <table class="wide">
@@ -28,13 +45,18 @@
       </tbody>
     </table>
 
-    <h2>Compare arrays by position, by key or ignoring order</h2>
+    <h2 id="compare-by-id">Compare JSON arrays by id</h2>
     <p>Arrays are the hard part of a JSON compare. Take two lists of three records with the ids 1, 2 and 3. In the second list the records come in another order, and record 1 has a new value. Compared by position, item 1 meets item 1, item 2 meets item 2, and so on. Every item sits in a different place, so the tool reports 6 changes.</p>
-    <p>Compared by key <code>id</code>, each record meets the record with the same id. The tool reports one change: <code>$.u[id=1].v</code>. This is the usual choice when you compare API responses.</p>
-    <p>The default, <strong>Auto</strong>, looks for a field that every item has and that never repeats. It tries <code>id</code>, <code>uuid</code>, <code>_id</code>, <code>key</code>, <code>sku</code>, <code>code</code>, <code>slug</code>, <code>email</code> and <code>name</code>, in this order. It tells you what it chose above the result, with a link to change it. If the ids repeat, Auto falls back to position and shows a warning.</p>
-    <p><strong>Ignore order</strong> matches items that are equal, wherever they sit. It then pairs the items that are left by the number of fields they share, so a changed item shows as changed and not as removed plus added.</p>
+    <p>Compared by key <code>id</code>, each record meets the record with the same id. The tool reports one change: <code>$.u[id=1].v</code>. This is the usual choice when you compare API responses. In <strong>Side by side</strong>, matched records sit on the same row, and a moved record carries a <span aria-hidden="true">⇅</span> mark.</p>
+    <p>The default, <strong>Auto</strong>, looks for a field that every item has and that never repeats. It tries <code>id</code>, <code>uuid</code>, <code>_id</code>, <code>key</code>, <code>sku</code>, <code>code</code>, <code>slug</code>, <code>email</code> and <code>name</code>, in this order. It tells you what it chose above the result, and each array has its own choice. If the ids repeat, Auto falls back to position and shows a warning.</p>
+    <p><button type="button" class="btn" data-scenario="compare-by-id">Load the match by id example</button></p>
 
-    <h2>Ignore fields such as timestamps</h2>
+    <h2 id="ignore-array-order">Ignore array order in a JSON compare</h2>
+    <p>Sometimes the order of items does not matter. A list of members or tags can come back in any order. Set <strong>Arrays</strong> to <strong>Ignore order</strong>. The tool matches items that are equal, wherever they sit, at every depth. It then pairs the items that are left by the number of fields they share, so a changed item shows as changed and not as removed plus added.</p>
+    <p>You can also choose it for one array only, for example <code>roles</code>, and keep Auto for the rest. When a position match finds the same items in another order, the result suggests Ignore order.</p>
+    <p><button type="button" class="btn" data-scenario="ignore-array-order">Load the ignore order example</button></p>
+
+    <h2 id="ignore-fields">Ignore fields such as timestamps</h2>
     <p>Fields like <code>updatedAt</code> or <code>requestId</code> change on every call. Add them under <strong>Options</strong>, <strong>Ignore paths</strong>, one pattern per line:</p>
     <ul>
       <li><code>**.updatedAt</code> skips that field at any depth.</li>
@@ -42,9 +64,11 @@
       <li><code>$.meta.requestId</code> skips one exact place.</li>
     </ul>
     <p>A pattern with an error shows the line number. The result tells you how many places were ignored.</p>
+    <p><button type="button" class="btn" data-scenario="ignore-fields">Load the ignore fields example</button></p>
 
-    <h2>Large files</h2>
-    <p>The compare runs in a background worker, so you can keep typing while it works. A Cancel button appears when a compare takes more than a moment. In our tests, two files of about 5 MB with 35,000 records each compared in under two seconds on a laptop. Files up to 50 MB open, and the tool warns you above 25 MB. Very large files depend on your device and browser.</p>
+    <h2 id="large-files">Compare large JSON files</h2>
+    <p>The compare runs in a background worker, so you can keep typing while it works. A Cancel button appears when a compare takes more than a moment. In our tests, two files of about 5 MB with 35,000 records each compared in under two seconds on a laptop. The result shows the time it took. Files up to 50 MB open, and the tool warns you above 25 MB. Very large files depend on your device and browser.</p>
+    <p><button type="button" class="btn" data-scenario="large-files">Compare two 5 MB files</button></p>
 
     <h2>Your data stays in your browser</h2>
     <p>The comparison runs on your device. The page does not send what you paste to a server. You can check this yourself. Open the Network tab in your browser tools, paste two documents and press Compare. No request carries your data.</p>

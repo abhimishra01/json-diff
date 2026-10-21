@@ -388,7 +388,7 @@ expectErr('hex escape', '["\\u12"]', 1, 3, 'A `\\u` escape needs 4 hex digits, f
 {
   const { SAMPLE_A, SAMPLE_B } = await import('../src/lib/jd/sample.js');
   const r = cmp(SAMPLE_A, SAMPLE_B);
-  const v = buildView(r.trees, r.changes, false);
+  const v = buildView(r.trees, r.changes, r.matches, false);
   const text = (lines, rows, i) => (rows[i] >= 0 ? lines[rows[i]].trim() : null);
   let level = 0;
   for (let i = 0; i < v.rowsA.length; i++) {
@@ -403,6 +403,48 @@ expectErr('hex escape', '["\\u12"]', 1, 3, 'A `\\u` escape needs 4 hex digits, f
   // every line is on exactly one row
   eq(new Set(Array.from(v.rowsA).filter((x) => x >= 0)).size, v.a.length, 'all A lines are shown');
   eq(new Set(Array.from(v.rowsB).filter((x) => x >= 0)).size, v.b.length, 'all B lines are shown');
+}
+
+// ---- side by side: matched items meet on one row, even when moved
+{
+  const r = cmp(J10A, J10B);
+  const v = buildView(r.trees, r.changes, r.matches, false);
+  const idLine = (lines, n) => lines.findIndex((l) => l.trim() === `"id": ${n},`);
+  eq([1, 2, 3].map((n) => idLine(v.b, n)).every((x, k, arr) => k === 0 || x > arr[k - 1]), true, 'B shows its items in the order of A');
+  for (const n of [1, 2, 3]) {
+    const rowA = v.lineRowA[idLine(v.a, n)];
+    const rowB = v.lineRowB[idLine(v.b, n)];
+    eq(rowA, rowB, `item ${n} is on the same row on both sides`);
+  }
+  eq([v.movedA.length, v.movedB.length], [1, 1], 'one item is tagged as moved on each side');
+  eq(v.a[v.movedA[0]].trim(), '{', 'moved tag sits on the first line of the item');
+  // the change inside a moved item is still marked on the right lines
+  const sp = v.spans[0];
+  eq([v.a[sp[0]].trim(), v.b[sp[2]].trim()], ['"v": "a"', '"v": "CHANGED"'], 'the change lines are found');
+  // items only in B go after their old neighbor; items only in A leave a filler row
+  const r2 = cmp('{"u":[{"id":1},{"id":2},{"id":3}]}', '{"u":[{"id":3},{"id":9},{"id":1}]}');
+  const v2 = buildView(r2.trees, r2.changes, r2.matches, false);
+  eq(v2.rowsA.length, v2.rowsB.length);
+  eq(new Set(Array.from(v2.rowsB).filter((x) => x >= 0)).size, v2.b.length, 'all B lines are shown');
+  eq(v2.lineRowA[idLine(v2.a, 1)], v2.lineRowB[idLine(v2.b, 1)], 'matched item 1 aligned');
+  eq(v2.lineRowA[idLine(v2.a, 3)], v2.lineRowB[idLine(v2.b, 3)], 'matched item 3 aligned');
+  // Ignore order matches too
+  const r3 = cmp('["a","b","c"]', '["c","a","b"]', { arrays: { mode: 'order' } });
+  const v3 = buildView(r3.trees, r3.changes, r3.matches, false);
+  eq(v3.b.map((l) => l.trim()), v3.a.map((l) => l.trim()), 'order mode: both sides read alike');
+}
+
+// ---- the one-click examples show what they promise
+{
+  const { SCENARIOS, scenarioTexts } = await import('../src/lib/jd/scenarios.js');
+  const run = (id) => { const sc = SCENARIOS[id]; const t = scenarioTexts(sc); return cmp(t.a, t.b, sc.opts); };
+  eq(brief(run('exact-numbers')), ['changed $.orderId'], 'exact numbers example: 1 change, 10.5 equals 10.50');
+  eq(brief(run('compare-by-id')), ['changed $.users[id=1].email'], 'by id example');
+  eq(brief(run('ignore-array-order')), ['changed $.labels[1].color'], 'ignore order example');
+  eq(brief(run('ignore-fields')), ['changed $.status'], 'ignore fields example');
+  const big = run('large-files');
+  eq([big.changes.length, big.changes.map((c) => c.path)], [3, ['$[id=101].name', '$[id=15001].score', '$[id=35000].active']], 'large example: 3 edits');
+  eq(Object.keys(SCENARIOS).sort(), ['compare-by-id', 'exact-numbers', 'ignore-array-order', 'ignore-fields', 'large-files']);
 }
 
 // ---- deep nesting is fast now that paths are built lazily

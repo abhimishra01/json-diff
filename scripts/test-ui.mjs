@@ -289,6 +289,74 @@ for (const w of [320, 390, 820, 1280, 1920]) {
   await page.context().close();
 }
 
+// ---------- one-click examples, share link, filter box, moved items
+{
+  const page = await newPage();
+  const expect = { 'exact-numbers': '1 change', 'compare-by-id': '1 change', 'ignore-array-order': '1 change', 'ignore-fields': '1 change', 'large-files': '3 changes' };
+  for (const [id, want] of Object.entries(expect)) {
+    await page.click(`.jd-try [data-scenario="${id}"]`);
+    await page.waitForFunction((w) => document.getElementById('jd-sum-text').textContent.trim() === w, want, { timeout: 30000 });
+    eq(await page.locator('#jd-sum-text').innerText(), want, `example ${id}`);
+  }
+  await page.click('.jd-try [data-scenario="exact-numbers"]');
+  await page.waitForFunction(() => document.querySelector('#jd-list .row .path')?.textContent === '$.orderId');
+  ok((await text(page, '#jd-list')).includes('12345678901234567891'), 'the 20-digit example shows the exact number');
+  await page.click('article [data-scenario="ignore-fields"]');
+  await page.waitForFunction(() => document.getElementById('jd-in-a').value.includes('requestId'));
+  ok(await page.locator('.jd-chip', { hasText: 'Ignore paths: 2' }).isVisible(), 'the example turns its options on');
+  await page.click('article [data-scenario="ignore-array-order"]');
+  await page.waitForFunction(() => document.getElementById('jd-arrays').value === 'order');
+  ok((await page.locator('.jd-chip', { hasText: 'Ignore paths' }).count()) === 0, 'an example starts from default options');
+  // moved items in side by side
+  await page.click('article [data-scenario="compare-by-id"]');
+  await page.waitForSelector('#jd-list .row');
+  await page.click('#jd-tab-sbs');
+  await page.waitForSelector('#jd-sw-a .sl');
+  ok((await page.locator('#jd-sw-b .sl.m-moved').count()) >= 1 && (await page.locator('#jd-sw-a .sl.m-moved').count()) >= 1, 'moved item is tagged on both sides');
+  ok(await page.locator('#jd-moved-note').isVisible(), 'moved note shows');
+  const idRows = await page.evaluate(() => {
+    const rows = (id) => [...document.querySelectorAll(`#${id} .sl .st`)].map((e) => e.textContent.trim());
+    const a = rows('jd-sw-a');
+    const b = rows('jd-sw-b');
+    return [a.indexOf('"id": 3,'), b.indexOf('"id": 3,'), a.indexOf('"id": 1,'), b.indexOf('"id": 1,')];
+  });
+  ok(idRows[0] >= 0 && idRows[0] === idRows[1] && idRows[2] === idRows[3], 'matched records sit on the same row: ' + idRows);
+  await page.click('#jd-tab-list');
+  // filter box
+  await page.fill('#jd-find', 'email');
+  await page.waitForFunction(() => document.querySelectorAll('#jd-list .row').length === 1);
+  await page.click('#jd-copy-report');
+  const rep = await page.evaluate(() => navigator.clipboard.readText());
+  ok(rep.includes('Filter: text "email"'), 'report says it is filtered: ' + rep.slice(0, 120));
+  await page.fill('#jd-find', 'zzz');
+  await page.waitForFunction(() => document.getElementById('jd-list-note').textContent.includes('No changes match'));
+  await page.fill('#jd-find', '');
+  // hash opens an example
+  const url = page.url().split('#')[0];
+  await page.goto(url + '#ignore-fields');
+  await page.reload(); // a new page load, so the address is read again
+  await page.waitForFunction(() => document.getElementById('jd-in-a').value.includes('requestId'));
+  await page.waitForFunction(() => document.getElementById('jd-sum-text').textContent.trim() === '1 change');
+  // share link round trip
+  await page.click('#jd-share');
+  await page.waitForFunction(async () => (await navigator.clipboard.readText()).includes('#d='));
+  const link = await page.evaluate(() => navigator.clipboard.readText());
+  const p2 = await page.context().newPage();
+  await p2.goto(link);
+  await p2.waitForFunction(() => document.getElementById('jd-sum-text')?.textContent.trim() === '1 change');
+  ok((await p2.inputValue('#jd-in-a')).includes('requestId'), 'the share link opens the same documents');
+  ok(await p2.locator('.jd-chip', { hasText: 'Ignore paths: 2' }).isVisible(), 'and the same options');
+  // the report names the type of a type change
+  await page.fill('#jd-in-a', '{"v":1}');
+  await page.fill('#jd-in-b', '{"v":"1"}');
+  await page.click('#jd-compare');
+  await page.waitForFunction(() => document.getElementById('jd-list').textContent.includes('Type change'));
+  await page.click('#jd-copy-report');
+  ok((await page.evaluate(() => navigator.clipboard.readText())).includes('T $.v: type change, number to string: 1 -> "1"'), 'type change line in the report');
+  eq(page.errors, [], 'no console errors with examples');
+  await page.context().close();
+}
+
 // ---------- per-array choice and the Ignore order hint
 {
   const page = await newPage();
@@ -367,6 +435,17 @@ for (const w of [320, 390, 820, 1280, 1920]) {
   await page.tap('#jd-compare-bar');
   await page.waitForSelector('#jd-list .row');
   ok(await page.locator('#jd-body-a').isHidden(), 'inputs collapse after a compare');
+  // collapsed: one line per box, with the size, the state and an Edit button
+  ok((await text(page, '#jd-pane-a .jd-pane-head')).includes('1 line'), 'collapsed header shows the size');
+  eq(await page.locator('#jd-pane-a .jd-pane-acts button:visible').count(), 1, 'collapsed header has only the Edit button');
+  eq((await page.locator('#jd-pane-a [data-act="collapse"]').innerText()).trim(), 'Edit');
+  const headH = await page.evaluate(() => document.querySelector('#jd-pane-a .jd-pane-head').getBoundingClientRect().height);
+  ok(headH < 70, 'collapsed header is one line high: ' + headH);
+  ok(await page.evaluate(() => document.getElementById('jd-res').getBoundingClientRect().top < 400), 'the result is near the top after Compare');
+  await page.tap('#jd-pane-a [data-act="collapse"]');
+  ok(await page.locator('#jd-body-a').isVisible(), 'Edit opens the box again');
+  await page.tap('#jd-compare-bar');
+  await page.waitForFunction(() => document.getElementById('jd-body-a').offsetParent === null);
   await page.tap('#jd-phonebar [data-go="edit"]');
   ok(await page.locator('#jd-body-a').isVisible(), 'Edit opens the inputs');
   // tap targets: 44 px for every control, link and chip outside running text; 16 px text in the boxes
@@ -374,7 +453,7 @@ for (const w of [320, 390, 820, 1280, 1920]) {
   await page.waitForSelector('#jd-list .row');
   await page.selectOption('#jd-arrays', 'key');
   await page.tap('#jd-options-btn');
-  const small = await page.evaluate(() => [...document.querySelectorAll('header a, header button, #tool button, #tool select, #tool input:not([type=file]):not([type=checkbox]):not([type=radio]), #tool textarea, #tool label.jd-check, #tool .link, footer nav a, summary')]
+  const small = await page.evaluate(() => [...document.querySelectorAll('header a, header button, .jd-try button, article button, #tool button, #tool select, #tool input:not([type=file]):not([type=checkbox]):not([type=radio]), #tool textarea, #tool label.jd-check, #tool .link, footer nav a, summary')]
     .filter((e) => e.offsetParent && !e.closest('[hidden]') && !e.closest('.sr-only') && !(e.classList.contains('link') && e.closest('p:not(.info-hint)')))
     .filter((e) => e.getBoundingClientRect().height < 43.5)
     .map((e) => (e.id || e.className || e.tagName) + ':' + (e.textContent || '').trim().slice(0, 20) + ' ' + Math.round(e.getBoundingClientRect().height)));

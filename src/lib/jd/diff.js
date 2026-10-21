@@ -80,6 +80,7 @@ export function diffTrees(A, B, opts) {
   const warnings = [];
   const choices = new Map(); // shape|mode|key -> { path, mode, key, count }
   const hints = new Map(); // shape -> { path }
+  const matches = []; // arrays matched by key or content: { a, b, pairs: [i, j, i, j, ...] }, used by the side by side view
   const warned = new Set();
   let hintBudget = HINT_BUDGET;
 
@@ -176,6 +177,7 @@ export function diffTrees(A, B, opts) {
     for (let j = 0; j < b.length; j++) idxB.set(keyIdentity(getKey(b[j], spec)), j);
     const used = new Uint8Array(b.length);
     const list = [];
+    const pairs = [];
     for (let i = 0; i < a.length; i++) {
       const kv = getKey(a[i], spec);
       const j = idxB.get(keyIdentity(kv));
@@ -183,6 +185,7 @@ export function diffTrees(A, B, opts) {
       if (j === undefined) list.push(rem(ctx, d, '/' + i, a[i]));
       else {
         used[j] = 1;
+        pairs.push(i, j);
         list.push({ t: 'pair', a: a[i], b: b[j], ctx: child(ctx, d, '/' + i, '/' + j) });
       }
     }
@@ -190,6 +193,7 @@ export function diffTrees(A, B, opts) {
       if (used[j]) continue;
       list.push(add(ctx, '[' + keyName + '=' + keyShown(getKey(b[j], spec)) + ']', '/' + j, b[j]));
     }
+    if (pairs.length) matches.push({ a, b, pairs });
     return list;
   }
 
@@ -203,11 +207,15 @@ export function diffTrees(A, B, opts) {
       else pool.set(canonB[j], [j]);
     }
     const usedB = new Uint8Array(b.length);
+    const pairs = [];
     let leftA = [];
     for (let i = 0; i < a.length; i++) {
       const l = pool.get(canonA[i]);
-      if (l && l.length) usedB[l.shift()] = 1;
-      else leftA.push(i);
+      if (l && l.length) {
+        const j = l.shift();
+        usedB[j] = 1;
+        pairs.push(i, j);
+      } else leftA.push(i);
     }
     let leftB = [];
     for (let j = 0; j < b.length; j++) if (!usedB[j]) leftB.push(j);
@@ -221,6 +229,7 @@ export function diffTrees(A, B, opts) {
         for (const j of leftB) {
           if (takenB.has(j) || !(b[j] instanceof Num)) continue;
           if (numbersEqual(a[i], b[j], opts.numbers).eq) {
+            pairs.push(i, j);
             gone.add(i);
             takenB.add(j);
             break;
@@ -268,6 +277,8 @@ export function diffTrees(A, B, opts) {
       }
     }
     const list = [];
+    for (const [i, j] of pairOf) pairs.push(i, j);
+    if (pairs.length) matches.push({ a, b, pairs });
     for (const i of leftA) {
       const j = pairOf.get(i);
       if (j !== undefined) list.push({ t: 'pair', a: a[i], b: b[j], ctx: child(ctx, '[' + i + ']', '/' + i, '/' + j) });
@@ -363,7 +374,7 @@ export function diffTrees(A, B, opts) {
     return positionWithHint(a, b, ctx);
   }
 
-  return { changes, warnings, choices: Array.from(choices.values()), hints: Array.from(hints.values()) };
+  return { changes, warnings, choices: Array.from(choices.values()), hints: Array.from(hints.values()), matches };
 }
 
 export function summarize(changes) {

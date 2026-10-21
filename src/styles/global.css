@@ -143,7 +143,23 @@ textarea.ctl { padding: 8px 10px; width: 100%; line-height: 1.5; resize: vertica
 .jd-status[data-state="valid"]::before { content: "\2713\00a0"; }
 .jd-status[data-state="error"] { background: var(--del-bg); color: var(--del-ink); border-color: var(--del-edge); }
 .jd-status[data-state="error"]::before { content: "!\00a0"; font-weight: 800; }
+.jd-lines { font-size: .8125rem; color: var(--muted); }
 .jd-pane.is-collapsed .jd-body { display: none; }
+/* Collapsed: one line with the name, the state, the size and an Edit button */
+.jd-pane.is-collapsed .jd-pane-acts > :not([data-act="collapse"]) { display: none; }
+.jd-pane.is-collapsed .jd-pane-head { margin-bottom: 0; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.jd-find { display: block; margin: 0 0 10px; }
+.jd-find input { width: 100%; max-width: 24rem; }
+.kbd { margin-left: 6px; font-size: .75rem; font-weight: 600; opacity: .85; border: 1px solid currentColor; border-radius: 5px; padding: 0 5px; }
+@media (hover: none) { .kbd { display: none; } }
+.jd-try { margin: 14px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: .9375rem; }
+.jd-try > span { font-weight: 600; color: var(--muted); }
+.proof { border: 1px solid var(--line-strong); border-left: 4px solid var(--brand-ink); border-radius: 12px; background: var(--card); padding: 14px 16px; margin: 0 0 1.25rem; max-width: 40rem; }
+.proof table { margin-bottom: .75rem; }
+.proof .btn { margin-top: 4px; }
+.prose-site .btn { text-decoration: none; display: inline-flex; align-items: center; }
+.sl.m-moved { background: color-mix(in oklab, var(--typ-bg) 55%, transparent); color: var(--typ-ink); }
+.sl.m-moved .sn { color: inherit; opacity: .8; }
 
 .jd-big { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px 12px; border-radius: 10px; background: var(--chg-bg); color: var(--chg-ink); border-left: 4px solid var(--chg-edge); font-size: .875rem; }
 .jd-big[hidden] { display: none; }
@@ -271,6 +287,9 @@ textarea.ctl { padding: 8px 10px; width: 100%; line-height: 1.5; resize: vertica
   .jd-field .ctl { flex: 1; min-width: 0; }
   .jd-pane-acts { margin-left: 0; width: 100%; }
   .jd-pane-acts .btn-sm { flex: 1 1 0; padding: 0 6px; }
+  .jd-pane.is-collapsed .jd-pane-acts { width: auto; margin-left: auto; }
+  .jd-pane.is-collapsed .jd-pane-acts .btn-sm { padding: 0 16px; }
+  .jd-try .btn-sm { flex: 1 1 auto; }
   .jd-sum-acts { margin-left: 0; }
   .vals { grid-template-columns: minmax(0, 1fr); }
   .jd-sbs { grid-template-columns: minmax(0, 1fr); }

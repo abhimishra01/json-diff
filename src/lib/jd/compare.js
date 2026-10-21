@@ -65,6 +65,7 @@ export function compareTexts(textA, textB, rawOpts, cache = new ParseCache(), on
     warnings,
     choices: d.choices,
     hints: d.hints,
+    matches: d.matches,
     ignored: { patterns: ig.patterns.length, places, errors: ig.errors },
     trees: { a: A, b: B },
   };

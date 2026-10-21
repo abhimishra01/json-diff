@@ -29,7 +29,7 @@ function onCompare(msg) {
     post({ type: 'invalid', id, a: r.a, b: r.b });
     return;
   }
-  last = { trees: r.trees, changes: r.changes };
+  last = { trees: r.trees, changes: r.changes, matches: r.matches };
   post({
     type: 'result',
     id,
@@ -66,7 +66,7 @@ function onView(msg) {
     post({ type: 'view', id: msg.id, ok: false });
     return;
   }
-  const v = buildView(last.trees, last.changes, msg.sortKeys);
+  const v = buildView(last.trees, last.changes, last.matches, msg.sortKeys);
   post({ type: 'view', id: msg.id, ok: true, ...v });
 }
 

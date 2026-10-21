@@ -60,14 +60,16 @@ export function compact(v, limit = 1000) {
 
 /**
  * Pretty print to an array of lines.
- * opts: { sortKeys, indent (2), want: Set of JSON Pointers whose first line number is wanted }
- * Returns { lines, lineOf: Map(pointer -> line index) }
+ * opts: { sortKeys, indent (2), want: Set of JSON Pointers whose first line number is wanted,
+ *         order: Map(array -> indexes in the order to show), moved: Map(array -> Set of indexes) }
+ * Returns { lines, lineOf: Map(pointer -> line index), movedLines: first lines of moved items }
  */
 export function pretty(root, opts = {}) {
   const ind = ' '.repeat(opts.indent ?? 2);
   const want = opts.want && opts.want.size ? opts.want : null;
   const lines = [];
   const lineOf = new Map();
+  const movedLines = []; // first line of each item listed in opts.moved
   const scalar = (x) => {
     if (x === null) return 'null';
     if (x instanceof Num) return x.s;
@@ -98,7 +100,11 @@ export function pretty(root, opts = {}) {
       } else {
         lines.push(ind.repeat(depth) + pendingPrefix + (obj ? '{' : '['));
         pendingPrefix = '';
-        stack.push({ obj, src: cur, keys: obj ? entriesOf(cur) : null, i: 0, size, depth: depth + 1, ptr: curPtr });
+        stack.push({
+          obj, src: cur, keys: obj ? entriesOf(cur) : null, i: 0, size, depth: depth + 1, ptr: curPtr,
+          order: obj ? null : (opts.order && opts.order.get(cur)) || null, // item order to show, as original indexes
+          moved: obj ? null : (opts.moved && opts.moved.get(cur)) || null, // original indexes of moved items
+        });
         cur = undefined;
       }
     } else {
@@ -109,7 +115,7 @@ export function pretty(root, opts = {}) {
     // find the next value
     for (;;) {
       const f = stack[stack.length - 1];
-      if (!f) return { lines, lineOf };
+      if (!f) return { lines, lineOf, movedLines };
       if (f.i >= f.size) {
         stack.pop();
         lines.push(ind.repeat(f.depth - 1) + (f.obj ? '}' : ']'));
@@ -127,9 +133,11 @@ export function pretty(root, opts = {}) {
         pendingPrefix = JSON.stringify(k) + ': ';
         curPtr = want ? f.ptr + '/' + ptrEsc(k) : '';
       } else {
-        cur = f.src[f.i];
+        const idx = f.order ? f.order[f.i] : f.i;
+        cur = f.src[idx];
         pendingPrefix = '';
-        curPtr = want ? f.ptr + '/' + f.i : '';
+        curPtr = want ? f.ptr + '/' + idx : '';
+        if (f.moved && f.moved.has(idx)) movedLines.push(lines.length);
       }
       f.i++;
       break;

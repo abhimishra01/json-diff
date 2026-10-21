@@ -50,6 +50,14 @@ const jsonLd = [
     <h1 class="text-xl font-extrabold leading-tight tracking-tight [text-wrap:balance] sm:text-3xl">JSON Diff Checker: Compare Two JSON Files</h1>
     <p class="mt-1 max-w-3xl text-sm text-muted sm:text-base">See every change by path. Your data stays in your browser.</p>
     <div class="mt-4 sm:mt-5"><Tool /></div>
+    <nav class="jd-try" aria-label="Examples">
+      <span>Try an example:</span>
+      <button type="button" class="btn-sm" data-scenario="ignore-array-order">Ignore array order</button>
+      <button type="button" class="btn-sm" data-scenario="ignore-fields">Ignore fields</button>
+      <button type="button" class="btn-sm" data-scenario="compare-by-id">Compare by id</button>
+      <button type="button" class="btn-sm" data-scenario="exact-numbers">Exact numbers</button>
+      <button type="button" class="btn-sm" data-scenario="large-files">Large files</button>
+    </nav>
     <AdSlot />
   </section>
   <Article />

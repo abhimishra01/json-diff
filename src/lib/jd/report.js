@@ -6,7 +6,7 @@ export function changeLine(c) {
   switch (c.kind) {
     case 'added': return `+ ${c.path}: ${c.b}`;
     case 'removed': return `- ${c.path}: ${c.a}`;
-    case 'type': return `T ${c.path}: ${c.a} (${c.aType}) -> ${c.b} (${c.bType})`;
+    case 'type': return `T ${c.path}: type change, ${c.aType} to ${c.bType}: ${c.a} -> ${c.b}`;
     default: return `~ ${c.path}: ${c.a} -> ${c.b}` + (c.note ? ` (${c.note.replace(/\.$/, '')})` : '');
   }
 }

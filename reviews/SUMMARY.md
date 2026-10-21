@@ -71,3 +71,36 @@ The ten in the spec: ignore-array-order, ignore-fields, compare-api-responses, c
 18. compare-package-json
 19. compare-kubectl-json-output
 20. compare-geojson
+
+## Gap fix (Tony, 2026-10-21)
+
+Source: `comparison/json-diff.md` (Abed) and the coordinator's list. The tool stays single-purpose and browser-only. No new pages: the long-tail phrases are sections of the article with one-click examples.
+
+### Done: the 4 musts
+1. **Matched and moved items line up in side by side.** For arrays matched by key or by content (Ignore order), the Changed side now shows the items in the order of the Original. Matched items meet on one row. Items that exist on one side only get a filler row on the other. Items outside the longest unmoved run carry a quiet "moved" mark on both sides, with a one-line note. Tests: order, same-row, moved count, filler rows, Ignore order mode.
+2. **Five one-click examples** for the long-tail phrases: ignore array order, ignore fields, compare by id, exact numbers, large files. They sit as buttons under the tool and as sections with an H2 and an anchor in the article. Each loads both documents and sets only the options it needs. The page address `#ignore-array-order` (and the other ids) opens the example. "Large files" builds two 5 MB files in the browser and shows how long the compare took. Tests check the promised result for each example (1, 1, 1, 1 and 3 changes).
+3. **Proof block for exact numbers** in the article (the 20-digit pair, with the "Try the 20-digit example" button). It says three of four popular tools called the pair identical in our test, without naming them.
+4. **Phone: the editors collapse after Compare, paste, Sample, Open file and examples.** A collapsed box is one line: name, state, line count and an "Edit" button. The result starts near the top of the screen. Edit opens both boxes. Typing does not collapse the boxes while you work.
+
+### Done: cheap shoulds
+- Copy report names the type change: `T $.v: type change, number to string: 1 -> "1"`.
+- Copy share link (fragment, gzip, up to 50 KB of link, warning that it holds your data). The link opens the same documents and options. The network test still shows no request with data.
+- Filter box in the Changes list. The report follows both the kind filter and the box.
+- "Compared in N ms" under the result, a visible speed proof.
+- Ctrl+Enter hint on the Compare button (shows the Command key on Mac, hidden on touch).
+- Two FAQ items: Python, and sending a diff. The large-files text keeps the measured numbers.
+
+### Skipped, with reasons
+| Gap | Reason |
+|---|---|
+| 5. Show duplicate keys as a diff row | Spec J26 says the result is 0 changes plus a warning. The warning stays. |
+| 9. Tree tab | Spec P1, a larger feature. The filter box is done. |
+| 10. JSON Lines detection | Spec P1, not needed to win the named intents. |
+| 13. Link to the text diff tool | That tool is not live. Add it when it is. |
+| Up to 10 long-tail pages (gapfix brief) | The coordinator asked for sections inside the article. The page list stays under "Phase 2 SEO pages" above. |
+
+### Status
+- `npm test`: 181 checks. `test:release` (both builds, then privacy and page tests): pass, 205 page checks including axe, 44 px targets, examples, share round trip and the phone collapse.
+- Lighthouse mobile: 100, 100, 100, 100. LCP 1.3 s, CLS 0, 7 requests.
+- Screenshots at 1280 and 390, light and dark (empty, result, side by side, phone collapsed) in `screenshots/`.
+- Article is now about 1,050 words (8 sections plus the proof block). FAQ has 10 items.

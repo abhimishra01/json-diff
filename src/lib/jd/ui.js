@@ -5,6 +5,7 @@ import { compileIgnore } from './paths.js';
 import { locate, reportText, changeLabel } from './report.js';
 import { lineCol } from './parse.js';
 import { SAMPLE_A, SAMPLE_B } from './sample.js';
+import { SCENARIOS, scenarioTexts } from './scenarios.js';
 
 const OPT_KEY = 'bm.jsondiff.opts.v1';
 const PAGE = 500; // rows drawn at once
@@ -44,7 +45,8 @@ export function initTool() {
     summary: null,
     resultOk: false,
     loaded: 0,
-    kinds: new Set(), // active filter
+    kinds: new Set(), // active filter by kind
+    query: '', // active filter by text
     filtered: [],
     shown: 0,
     tab: 'list',
@@ -76,7 +78,7 @@ export function initTool() {
     tabList: $('jd-tab-list'), tabSbs: $('jd-tab-sbs'), panelList: $('jd-panel-list'), panelSbs: $('jd-panel-sbs'),
     progress: $('jd-progress'), progBar: $('jd-progbar'), progText: $('jd-progtext'), cancel: $('jd-cancel'),
     copyReport: $('jd-copy-report'), download: $('jd-download'), copyPatch: $('jd-copy-patch'),
-    toast: $('jd-toast'), bar: $('jd-phonebar'),
+    toast: $('jd-toast'), bar: $('jd-phonebar'), find: $('jd-find'), share: $('jd-share'), movedNote: $('jd-moved-note'),
     prev: $('jd-prev'), next: $('jd-next'), curLabel: $('jd-cur'), sbsNote: $('jd-sbs-note'),
   };
 
@@ -240,6 +242,10 @@ export function initTool() {
   const gutters = { a: $('jd-gut-a'), b: $('jd-gut-b') };
   const errLines = { a: $('jd-errline-a'), b: $('jd-errline-b') };
   const gutterCount = { a: 0, b: 0 };
+  function setLineInfo(side, n) {
+    const empty = n <= 1 && ta[side].value.trim() === '' && S.big[side] === null;
+    $('jd-lines-' + side).textContent = empty ? '' : `${fmtNum(n)} ${n === 1 ? 'line' : 'lines'}`;
+  }
   // Line height of the editors, read from the page so zoom and font settings keep the marker on the line.
   const lineHeight = () => parseFloat(getComputedStyle(ta.a).lineHeight) || ROW_H;
   function countLines(t) {
@@ -251,6 +257,7 @@ export function initTool() {
   function updateGutter(side) {
     const g = gutters[side];
     const n = countLines(ta[side].value);
+    setLineInfo(side, S.big[side] !== null ? countLines(S.big[side]) : n);
     const editor = g.parentElement;
     if (n > 20000) {
       editor.classList.add('no-gutter');
@@ -466,6 +473,8 @@ export function initTool() {
       return;
     }
     S.running = true;
+    S.t0 = performance.now();
+    S.elapsed = 0;
     S.texts = { a, b };
     const id = S.seq;
     clearTimeout(S.progTimer);
@@ -502,6 +511,7 @@ export function initTool() {
       onChunk();
     } else if (m.type === 'done') {
       S.running = false;
+      S.elapsed = performance.now() - S.t0;
       hideProgress();
       afterLoaded();
     } else if (m.type === 'error') {
@@ -580,6 +590,8 @@ export function initTool() {
     S.shown = 0;
     S.cur = -1;
     S.kinds = new Set();
+    S.query = '';
+    el.find.value = '';
     el.msg.hidden = true;
     el.empty.hidden = true;
     el.res.hidden = false;
@@ -600,7 +612,7 @@ export function initTool() {
     if (S.shown < Math.min(PAGE, S.filtered.length)) renderList(false);
   }
   function afterLoaded() {
-    updatePatchButton();
+    updatePatchButton(); // also redraws the info lines, with the time
   }
 
   // ----- summary, filters, info -----
@@ -654,6 +666,7 @@ export function initTool() {
       parts.push(`<p class="info-line">Ignored: ${S.ignored.patterns} ${S.ignored.patterns === 1 ? 'pattern' : 'patterns'}, ${fmtNum(S.ignored.places)} ${S.ignored.places === 1 ? 'place' : 'places'}.</p>`);
     }
     if (S.patchWhy) parts.push(`<p class="info-line">${esc(S.patchWhy)}</p>`);
+    if (S.elapsed) parts.push(`<p class="info-line">Compared in ${S.elapsed < 1000 ? Math.max(1, Math.round(S.elapsed)) + ' ms' : (S.elapsed / 1000).toFixed(1) + ' s'}.</p>`);
     for (const w of S.warnings || []) parts.push(`<p class="info-warn"><span class="warn-mark" aria-hidden="true">!</span> ${esc(w).replace(/`([^`]+)`/g, '<code>$1</code>')}</p>`);
     if (S.summary.total === 0) {
       const bits = ['Key order and spacing are ignored.'];
@@ -665,8 +678,8 @@ export function initTool() {
 
   function buildFiltered() {
     const k = S.kinds;
-    const src = S.changes;
-    S.filtered = k.size ? src.filter((c) => c && k.has(c.kind)) : src.filter(Boolean);
+    const q = S.query.trim().toLowerCase();
+    S.filtered = S.changes.filter((c) => c && (!k.size || k.has(c.kind)) && (!q || (c.path + ' ' + (c.a || '') + ' ' + (c.b || '')).toLowerCase().includes(q)));
   }
 
   el.filters.addEventListener('click', (e) => {
@@ -742,8 +755,9 @@ export function initTool() {
     updateListNote();
   }
   function updateListNote() {
-    const total = S.kinds.size ? S.filtered.length : S.total;
-    const loading = !S.kinds.size && S.loaded < S.total;
+    const filtering = S.kinds.size > 0 || S.query.trim() !== '';
+    const total = filtering ? S.filtered.length : S.total;
+    const loading = !filtering && S.loaded < S.total;
     let txt = '';
     if (S.shown < S.filtered.length) {
       txt = `Showing the first ${fmtNum(S.shown)} of ${fmtNum(total)} changes.${S.total > 10000 ? ' Copy report includes all.' : ''}`;
@@ -752,12 +766,17 @@ export function initTool() {
     } else {
       el.more.hidden = true;
       if (loading) txt = `Loading ${fmtNum(S.total - S.loaded)} more changes…`;
-      else if (S.kinds.size && S.filtered.length === 0) txt = 'No changes of this kind.';
+      else if (filtering && S.filtered.length === 0) txt = 'No changes match.';
     }
     el.listNote.textContent = txt;
     el.listNote.hidden = txt === '';
   }
   el.more.addEventListener('click', () => renderList(false));
+  el.find.addEventListener('input', () => {
+    S.query = el.find.value;
+    buildFiltered();
+    renderList(true);
+  });
   el.list.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-act]');
     if (!b) return;
@@ -847,6 +866,7 @@ export function initTool() {
       const rows = this.side === 'a' ? v.rowsA : v.rowsB;
       const lines = this.side === 'a' ? v.a : v.b;
       const marks = this.side === 'a' ? v.markA : v.markB;
+      const moves = this.side === 'a' ? v.moveA : v.moveB;
       const h = this.vp.clientHeight || 400;
       const first = Math.max(0, Math.floor(this.vp.scrollTop / ROW_H) - 5);
       const last = Math.min(rows.length, first + Math.ceil(h / ROW_H) + 12);
@@ -872,6 +892,10 @@ export function initTool() {
           cls += ' m-' + c.kind;
           mk = KIND[c.kind].sym;
           d.dataset.ci = ci;
+        }
+        if (ci < 0 && moves[i]) {
+          cls += ' m-moved';
+          mk = '\u21C5';
         }
         if (curLo >= 0 && i >= curLo && i <= curHi) cls += ' cur';
         d.className = cls;
@@ -923,6 +947,11 @@ export function initTool() {
   function onView(m) {
     if (!S.viewWait || m.id !== S.viewWait.id || S.viewWait.compareId !== S.seq) return;
     if (!m.ok) { el.sbsNote.textContent = 'Compare first to see both documents.'; return; }
+    const flags = (n, list) => {
+      const arr = new Uint8Array(n);
+      for (const i of list) arr[i] = 1;
+      return arr;
+    };
     const mark = (n, side) => {
       const arr = new Int32Array(n).fill(-1);
       for (let ci = 0; ci < m.spans.length; ci++) {
@@ -937,11 +966,13 @@ export function initTool() {
       sortKeys: S.opts.sortKeys, compareId: S.seq, spans: m.spans, a: m.a, b: m.b,
       rowsA: m.rowsA, rowsB: m.rowsB, lineRowA: m.lineRowA, lineRowB: m.lineRowB,
       markA: mark(m.a.length, 'a'), markB: mark(m.b.length, 'b'),
+      moveA: flags(m.a.length, m.movedA), moveB: flags(m.b.length, m.movedB), anyMoved: m.movedA.length + m.movedB.length > 0,
     };
     showView();
   }
   function showView() {
     el.sbsNote.textContent = S.ignored.patterns ? 'Ignored paths are hidden here.' : '';
+    el.movedNote.hidden = !S.view.anyMoved;
     const rows = S.view.rowsA.length;
     vl.a.set(rows);
     vl.b.set(rows);
@@ -1002,9 +1033,15 @@ export function initTool() {
   const allLoaded = () => S.loaded >= S.total;
   // The report follows the filter: with "added" and "removed" on, it lists only those.
   function buildReport() {
-    const list = S.kinds.size ? S.filtered : S.changes.filter(Boolean);
+    const filtering = S.kinds.size > 0 || S.query.trim() !== '';
+    const list = filtering ? S.filtered : S.changes.filter(Boolean);
     const extra = [];
-    if (S.kinds.size) extra.push(`Filter: ${[...S.kinds].join(', ')} (${fmtNum(list.length)} of ${fmtNum(S.total)} changes)`);
+    if (filtering) {
+      const bits = [];
+      if (S.kinds.size) bits.push([...S.kinds].join(', '));
+      if (S.query.trim()) bits.push(`text "${S.query.trim()}"`);
+      extra.push(`Filter: ${bits.join('; ')} (${fmtNum(list.length)} of ${fmtNum(S.total)} changes)`);
+    }
     const chips = activeChips().map((c) => c.text);
     if (chips.length) extra.push('Options: ' + chips.join('; '));
     if (list.some((c) => /\u2026"?$/.test(c.a || '') || /\u2026"?$/.test(c.b || ''))) extra.push('Values longer than 2,000 characters are shortened.');
@@ -1012,7 +1049,7 @@ export function initTool() {
   }
   el.copyReport.addEventListener('click', () => {
     if (!allLoaded()) { toast('Still loading changes. Try again in a moment.'); return; }
-    copyText(buildReport(), S.kinds.size ? 'Filtered report copied' : 'Report copied');
+    copyText(buildReport(), S.kinds.size || S.query.trim() ? 'Filtered report copied' : 'Report copied');
   });
   el.download.addEventListener('click', () => {
     if (!allLoaded()) { toast('Still loading changes. Try again in a moment.'); return; }
@@ -1077,7 +1114,7 @@ export function initTool() {
         const c = !pane.classList.contains('is-collapsed');
         pane.classList.toggle('is-collapsed', c);
         b.setAttribute('aria-expanded', String(!c));
-        b.textContent = c ? 'Show' : 'Hide';
+        b.textContent = c ? 'Edit' : 'Hide';
       }
     });
     pane.addEventListener('click', (e) => {
@@ -1113,7 +1150,7 @@ export function initTool() {
       pane.classList.add('is-collapsed');
       const b = pane.querySelector('[data-act=collapse]');
       b.setAttribute('aria-expanded', 'false');
-      b.textContent = 'Show';
+      b.textContent = 'Edit';
     }
   }
 
@@ -1219,10 +1256,81 @@ export function initTool() {
   }
   setBar('edit');
 
+  // ----- examples (scenario buttons and links) -----
+  function loadScenario(id, scroll) {
+    const sc = SCENARIOS[id];
+    if (!sc) return false;
+    const t = scenarioTexts(sc);
+    // An example starts from the default options, so earlier choices cannot hide what it shows.
+    S.opts = cleanOptions({ ...defaultOptions(), ...sc.opts, arrays: { ...defaultOptions().arrays, ...(sc.opts.arrays || {}) } });
+    saveOptions();
+    optsToForm();
+    setText('a', t.a, true);
+    setText('b', t.b, true);
+    expandPanes();
+    requestCompare(0, true);
+    toast(`Loaded ${sc.title}. Its options are on.`);
+    if (scroll && !isPhone()) root.scrollIntoView({ block: 'start' });
+    return true;
+  }
+  document.querySelectorAll('[data-scenario]').forEach((b) => b.addEventListener('click', () => loadScenario(b.dataset.scenario, true)));
+
+  // ----- share link: the two documents and the options, packed into the part of the address after # -----
+  // Browsers never send that part to a server. The link holds your data, and the page says so.
+  const CAN_SHARE = typeof CompressionStream === 'function' && typeof DecompressionStream === 'function';
+  const SHARE_MAX = 50000;
+  async function pipeText(stream, bytes) {
+    const out = new Blob([bytes]).stream().pipeThrough(stream);
+    return new Uint8Array(await new Response(out).arrayBuffer());
+  }
+  const toB64Url = (u8) => btoa(String.fromCharCode(...u8)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const fromB64Url = (t) => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  async function makeShareLink() {
+    const a = getText('a');
+    const b = getText('b');
+    if (a.length + b.length > 400000) return null;
+    const payload = JSON.stringify({ v: 1, a, b, o: { ...S.opts, tolerant: false } });
+    const packed = toB64Url(await pipeText(new CompressionStream('gzip'), new TextEncoder().encode(payload)));
+    if (packed.length > SHARE_MAX) return null;
+    return location.href.split('#')[0] + '#d=' + packed;
+  }
+  async function loadShared(packed) {
+    try {
+      const raw = await pipeText(new DecompressionStream('gzip'), fromB64Url(packed));
+      const d = JSON.parse(new TextDecoder().decode(raw));
+      if (!d || d.v !== 1 || typeof d.a !== 'string' || typeof d.b !== 'string') throw new Error('bad');
+      S.opts = { ...cleanOptions(d.o), tolerant: false };
+      saveOptions();
+      optsToForm();
+      setText('a', d.a, true);
+      setText('b', d.b, true);
+      requestCompare(0, true);
+      toast('Loaded the shared documents.');
+    } catch {
+      toast('This share link could not be read.');
+    }
+  }
+  if (CAN_SHARE) {
+    el.share.hidden = false;
+    el.share.addEventListener('click', async () => {
+      const link = await makeShareLink();
+      if (!link) { toast('Too big for a link. Use Download .txt, or share the files.'); return; }
+      await copyText(link, 'Link copied. It contains your data.');
+    });
+  }
+
+  // Compare shows the keys that run it
+  const kbd = root.querySelector('.kbd');
+  if (kbd && /Mac|iPhone|iPad/.test(navigator.platform || '')) kbd.textContent = '\u2318 Enter';
+
   // ----- start -----
   optsToForm();
   updateGutter('a');
   updateGutter('b');
   showEmptyState();
   root.dataset.ready = 'true';
+  // An address with #d=... opens a shared diff. An address with #ignore-array-order and so on opens that example.
+  const hash = location.hash.replace(/^#/, '');
+  if (hash.startsWith('d=') && CAN_SHARE) loadShared(hash.slice(2));
+  else if (SCENARIOS[hash]) loadScenario(hash, false);
 }

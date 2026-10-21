@@ -32,4 +32,12 @@ export const faq = [
     q: 'How do I compare JSON in VS Code or on the command line?',
     a: 'In VS Code, select two files and choose Compare Selected. This is a text diff, so key order and spacing show as changes. On the command line, diff <(jq -S . a.json) <(jq -S . b.json) sorts keys first, but it still compares arrays by position. This tool handles both cases.',
   },
+  {
+    q: 'How do I compare two JSON files in Python?',
+    a: 'Load both files with json.load and compare them with ==. Python ignores key order in objects, but it compares lists by position, so a reordered list shows as different. It also reads large integers exactly. For a readable list of changes with paths, matching by id and ignored fields, paste both files into this tool.',
+  },
+  {
+    q: 'Can I send a diff to someone?',
+    a: 'Yes. Press Copy share link after a compare. The link holds both documents and your options in the part after the # sign. Browsers never send that part to a server. The link contains your data, so share it only with people who may see it. Large pairs are too big for a link. Use Download .txt for those.',
+  },
 ];

@@ -24,7 +24,7 @@ const panes = [
       <input id="jd-key" class="ctl" type="text" placeholder="id" autocomplete="off" autocapitalize="off" spellcheck="false" size="10" />
     </label>
     <button type="button" id="jd-options-btn" class="btn" aria-expanded="false" aria-controls="jd-options"><span>Options</span></button>
-    <button type="button" id="jd-compare" class="btn btn-primary" title="Compare now (Ctrl or Cmd + Enter)">Compare</button>
+    <button type="button" id="jd-compare" class="btn btn-primary" title="Compare now (Ctrl or Cmd + Enter)">Compare <span class="kbd" aria-hidden="true">Ctrl Enter</span></button>
   </div>
 
   <div id="jd-options" class="jd-options" hidden>
@@ -69,6 +69,7 @@ const panes = [
         <div class="jd-pane-head">
           <p class="jd-pane-title" id={`jd-title-${p.side}`}>{p.title}</p>
           <span class="jd-status" id={`jd-st-${p.side}`} data-state="empty">Empty</span>
+          <span class="jd-lines" id={`jd-lines-${p.side}`}></span>
           <div class="jd-pane-acts">
             <button type="button" class="btn-sm" data-act="open" title="Open a JSON file" aria-label={`Open a file for ${p.title}`}>Open</button>
             <button type="button" class="btn-sm" data-act="format">Format</button>
@@ -121,6 +122,7 @@ const panes = [
           <button type="button" id="jd-copy-report" class="btn-sm">Copy report</button>
           <button type="button" id="jd-download" class="btn-sm">Download .txt</button>
           <button type="button" id="jd-copy-patch" class="btn-sm" title="JSON Patch (RFC 6902)">Copy JSON Patch</button>
+          <button type="button" id="jd-share" class="btn-sm" title="A link that holds both documents. It contains your data." hidden>Copy share link</button>
         </div>
       </div>
       <div id="jd-info" class="jd-info"></div>
@@ -131,6 +133,7 @@ const panes = [
         </div>
       </div>
       <div role="tabpanel" id="jd-panel-list" aria-labelledby="jd-tab-list">
+        <label class="jd-find"><span class="sr-only">Filter changes by path or value</span><input id="jd-find" class="ctl" type="search" placeholder="Filter by path or value" autocomplete="off" spellcheck="false" /></label>
         <ol id="jd-list" class="jd-list"></ol>
         <p id="jd-list-note" class="hint" hidden></p>
         <button type="button" id="jd-more" class="btn" hidden>Show more</button>
@@ -147,6 +150,7 @@ const panes = [
           <button type="button" class="btn-sm" data-sbs="b" aria-pressed="false">After</button>
         </div>
         <p id="jd-sbs-note" class="hint"></p>
+        <p id="jd-moved-note" class="hint" hidden><span aria-hidden="true">⇅</span> marks an item that moved. Matched items sit on the same row, so you can read across.</p>
         <div class="jd-sbs" id="jd-sbs">
           <div class="jd-sbs-col" data-col="a">
             <p class="jd-sbs-title">Original</p>
