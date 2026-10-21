@@ -1,0 +1,105 @@
+---
+import Page from '../layouts/Page.astro';
+import { url } from '../lib/url.ts';
+---
+<Page title="JSON diff in Python vs online" description="Compare two JSON files in Python with the standard library, or use an online JSON diff tool. See working code, the pitfalls, and when each way fits.">
+  <p>You can do a JSON diff in Python with a few lines and no packages. You can also paste both files into an <a href={url('/')}>online JSON diff checker</a>. This page shows both ways, so you can pick the one that fits the job.</p>
+
+  <h2>The short version</h2>
+  <p>Use Python when the check is part of a script or a test. Use an online JSON diff tool when you want to look at the changes once, or when you want to send the result to someone.</p>
+
+  <h2>Step 1: check if two JSON files are equal</h2>
+  <p>Load both files with <code>json.load</code>. Python then compares the parsed values. Key order and spacing do not matter.</p>
+<pre><code>{`import json, sys
+
+with open(sys.argv[1]) as f1, open(sys.argv[2]) as f2:
+    a, b = json.load(f1), json.load(f2)
+print("equal" if a == b else "different")`}</code></pre>
+  <p>This tells you if the files differ. It does not tell you where.</p>
+
+  <h2>Step 2: list every change by path</h2>
+  <p>This function walks both values at the same time. It yields the kind of change, the path, the old value and the new value.</p>
+<pre><code>{`import json
+
+def diff(a, b, path="$"):
+    """Yield (kind, path, old, new) for every difference between two parsed JSON values."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        for key in sorted(a.keys() | b.keys()):
+            child = f"{path}.{key}"
+            if key not in b:
+                yield ("removed", child, a[key], None)
+            elif key not in a:
+                yield ("added", child, None, b[key])
+            else:
+                yield from diff(a[key], b[key], child)
+    elif isinstance(a, list) and isinstance(b, list):
+        for i in range(max(len(a), len(b))):
+            child = f"{path}[{i}]"
+            if i >= len(b):
+                yield ("removed", child, a[i], None)
+            elif i >= len(a):
+                yield ("added", child, None, b[i])
+            else:
+                yield from diff(a[i], b[i], child)
+    elif a != b or type(a) is not type(b):
+        yield ("changed", path, a, b)
+
+old = json.loads('{"name": "Ada", "age": 36, "tags": ["a", "b"], "city": "London"}')
+new = json.loads('{"age": 37, "name": "Ada", "tags": ["a", "c", "d"], "email": "ada@example.com"}')
+for kind, path, before, after in diff(old, new):
+    print(kind, path, json.dumps(before), json.dumps(after))`}</code></pre>
+  <p>The output for the example:</p>
+<pre><code>{`changed $.age 36 37
+removed $.city "London" null
+added $.email null "ada@example.com"
+changed $.tags[1] "b" "c"
+added $.tags[2] null "d"`}</code></pre>
+  <p>The <code>type(a) is not type(b)</code> check matters. In Python, <code>1 == True</code> is <code>True</code>, so without it a number that became a boolean would be reported as equal.</p>
+
+  <h2>Step 3: get a line diff with difflib</h2>
+  <p>If you only want a text view, format both documents the same way and compare the lines. Sorting the keys removes false changes from key order.</p>
+<pre><code>{`import difflib, json
+
+a = json.dumps({"a": 1, "b": [1, 2]}, indent=2, sort_keys=True).splitlines()
+b = json.dumps({"a": 2, "b": [1, 2, 3]}, indent=2, sort_keys=True).splitlines()
+print("\\n".join(difflib.unified_diff(a, b, "old.json", "new.json", lineterm="")))`}</code></pre>
+  <p>The result is a unified diff, the same format Git uses:</p>
+<pre><code>{`--- old.json
++++ new.json
+@@ -1,7 +1,8 @@
+ {
+-  "a": 1,
++  "a": 2,
+   "b": [
+     1,
+-    2
++    2,
++    3
+   ]
+ }`}</code></pre>
+
+  <h2>Where the Python code falls short</h2>
+  <ul>
+    <li><strong>Array order.</strong> The function above compares items by position. If the same items come in another order, it reports many changes.</li>
+    <li><strong>Matching by id.</strong> To pair array items by a key such as <code>id</code>, you must write that code yourself.</li>
+    <li><strong>Ignored fields.</strong> Fields such as <code>updatedAt</code> need an extra filter step.</li>
+    <li><strong>Big numbers.</strong> Python keeps big integers exact. A float such as <code>1.0</code> equals <code>1</code>, which may or may not be what you want.</li>
+    <li><strong>Reading the result.</strong> Printed lines are fine for ten changes. They are hard to read for hundreds.</li>
+  </ul>
+
+  <h2>JSON diff online: when it is faster</h2>
+  <p>For a one-off check, an online JSON diff viewer saves the code. On the <a href={url('/')}>JSON diff checker</a> you paste the two documents and read a list of changes with the path, the old value and the new value. It can ignore array order, match array items by id and ignore fields. Everything runs in your browser, and your JSON is not sent to a server.</p>
+
+  <h2>Python or online?</h2>
+  <table class="wide">
+    <thead><tr><th>Situation</th><th>Better fit</th></tr></thead>
+    <tbody>
+      <tr><td>A check in a test or a build script</td><td>Python</td></tr>
+      <tr><td>A one-time look at two API responses</td><td>Online</td></tr>
+      <tr><td>Arrays in a different order, or matched by id</td><td>Online, or extra Python code</td></tr>
+      <tr><td>Sharing the result with a colleague</td><td>Online, with a share link</td></tr>
+      <tr><td>Files you must not paste into a web page</td><td>Python</td></tr>
+    </tbody>
+  </table>
+  <p>Ready to try it? Open the <a href={url('/')}>online JSON compare tool</a> and press Sample to see every kind of change.</p>
+</Page>

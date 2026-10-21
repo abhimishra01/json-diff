@@ -2,11 +2,13 @@
 // SEO article below the tool. Plain, short sentences. Speed numbers come from our own tests.
 // Each example button loads a pair of documents and sets the options for that case (see src/lib/jd/scenarios.js).
 // The section ids match the example ids, so the address #ignore-array-order opens that example.
+import { url } from '../lib/url.ts';
 ---
 <section aria-labelledby="about-tool" class="mx-auto max-w-5xl px-4 pt-16">
   <article class="prose-site">
     <h2 id="about-tool" style="margin-top:0">What a JSON diff checker does</h2>
-    <p>A JSON diff checker compares two JSON documents and lists what changed. This one shows each change with its path, for example <code>$.user.email</code>, the old value and the new value. It compares the data and ignores the layout.</p>
+    <p>This is a free JSON diff online: you paste two documents and read the result in the page. A JSON diff checker compares two JSON documents and lists what changed. This one shows each change with its path, for example <code>$.user.email</code>, the old value and the new value. It compares the data and ignores the layout. As a JSON diff viewer it keeps the list short, so you can read it without scrolling through both files.</p>
+    <p>Prefer code? See how to do a <a href={url('/json-diff-python/')}>JSON diff in Python</a> with the standard library, and when an online JSON diff tool is the faster choice.</p>
     <p>A plain text diff does not work well for JSON. Two files can hold the same data with the keys in another order, or one file can sit on a single line. A text diff then marks every line as changed. Here, only real changes show up.</p>
 
     <h2 id="exact-numbers">Exact numbers: JSON compare that does not round</h2>
