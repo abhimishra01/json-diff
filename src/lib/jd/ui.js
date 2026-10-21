@@ -429,8 +429,8 @@ export function initTool() {
     clearTimeout(S.progTimer);
     S.progTimer = setTimeout(() => {
       if (S.running && S.seq === id) {
-        const big = Math.max(a.length, b.length) > BIG_CHARS;
-        showProgress(big ? 'This may take a while.' : 'Working', 0);
+        S.bigWarn = Math.max(a.length, b.length) > BIG_CHARS;
+        showProgress(S.bigWarn ? 'This may take a while.' : 'Working', 0);
       }
     }, 400);
     getWorker().postMessage({ type: 'compare', id, a, b, opts: S.opts });
@@ -445,7 +445,7 @@ export function initTool() {
     if (m.type === 'view') return onView(m);
     if (m.id !== S.seq) return; // an older compare
     if (m.type === 'progress') {
-      if (!el.progress.hidden) showProgress(m.stage, m.fraction);
+      if (!el.progress.hidden) showProgress(S.bigWarn ? 'This may take a while. ' + m.stage : m.stage, m.fraction);
     } else if (m.type === 'invalid') {
       S.running = false;
       hideProgress();
@@ -844,12 +844,15 @@ export function initTool() {
   };
   vl.a.side = 'a';
   vl.b.side = 'b';
+  // Both panes scroll together. The gap between them is kept, so a change that was
+  // lined up with "next change" stays lined up while you scroll.
   let syncing = false;
-  for (const [x, y] of [[vl.a, vl.b], [vl.b, vl.a]]) {
+  let gap = 0; // scrollTop of B minus scrollTop of A
+  for (const [x, y, sign] of [[vl.a, vl.b, 1], [vl.b, vl.a, -1]]) {
     x.onscroll = () => {
       if (syncing) return;
       syncing = true;
-      y.vp.scrollTop = x.vp.scrollTop;
+      y.vp.scrollTop = Math.max(0, x.vp.scrollTop + sign * gap);
       y.vp.scrollLeft = x.vp.scrollLeft;
       requestAnimationFrame(() => { syncing = false; });
     };
@@ -905,6 +908,7 @@ export function initTool() {
     syncing = true;
     vl.a.scrollToLine(la);
     vl.b.scrollToLine(lb);
+    gap = vl.b.vp.scrollTop - vl.a.vp.scrollTop;
     requestAnimationFrame(() => { syncing = false; });
     vl.a.render();
     vl.b.render();
@@ -1003,6 +1007,7 @@ export function initTool() {
       if (act === 'open') fileInput.click();
       else if (act === 'format') { if (!isBlank(getText(side))) formatSide(side); }
       else if (act === 'copy') { const t = getText(side); if (t) copyText(t, 'Copied'); }
+      else if (act === 'clear') { setText(side, '', false); requestCompare(0); ta[side].focus(); }
       else if (act === 'collapse') {
         const c = !pane.classList.contains('is-collapsed');
         pane.classList.toggle('is-collapsed', c);

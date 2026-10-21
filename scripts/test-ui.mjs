@@ -42,7 +42,7 @@ for (const scheme of ['light', 'dark']) {
   await page.waitForSelector('#jd-list .row');
   eq(await page.locator('#jd-sum-text').innerText(), '9 changes', 'sample: 9 changes');
   eq(await page.locator('#jd-list .row').count(), 9);
-  eq(await page.locator('#jd-st-a').innerText(), '✓ Valid'.replace('✓ ', '') === 'Valid' ? await page.locator('#jd-st-a').innerText() : '');
+  ok((await page.locator('#jd-st-a').innerText()).endsWith('Valid'), 'status chip says Valid');
   // filter chips
   await page.click('.jd-filter.k-added');
   eq(await page.locator('#jd-list .row').count(), 2, 'filter added');
@@ -99,7 +99,7 @@ for (const scheme of ['light', 'dark']) {
   await compare(page, '{"a":1}', '');
   await page.waitForFunction(() => document.getElementById('jd-msg').textContent.includes('second'));
   eq(await page.locator('#jd-st-b').innerText(), 'Empty');
-  eq(await page.locator('#jd-st-a').innerText(), '✓ Valid'.slice(2) || 'Valid');
+  ok((await page.locator('#jd-st-a').innerText()).endsWith('Valid'), 'valid side still says Valid');
   // identical
   await compare(page, '{"a":1,"b":2}', '{"b":2,"a":1}');
   await page.waitForSelector('#jd-res:not([hidden])');
@@ -181,7 +181,11 @@ for (const scheme of ['light', 'dark']) {
   // open file
   await page.setInputFiles('#jd-pane-a input[type=file]', { name: 'a.json', mimeType: 'application/json', buffer: Buffer.from('{"k":1}') });
   await page.waitForFunction(() => document.getElementById('jd-in-a').value === '{"k":1}');
-  // drop does not break; clear
+  // per-pane Clear empties one box and keeps the other
+  await page.click('#jd-pane-b [data-act="clear"]');
+  eq(await page.inputValue('#jd-in-b'), '');
+  ok((await page.inputValue('#jd-in-a')).length > 0, 'the other box keeps its text');
+  await page.waitForFunction(() => document.getElementById('jd-msg').textContent.includes('second'));
   await page.click('#jd-clear');
   eq(await page.inputValue('#jd-in-a'), '');
   await page.waitForSelector('#jd-empty:not([hidden])');

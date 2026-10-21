@@ -36,9 +36,19 @@ export function serve(dir = path.resolve(root, process.env.JD_DIST || 'dist'), p
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
     fs.createReadStream(file).pipe(res);
   });
-  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => {
-    resolve({ url: `http://127.0.0.1:${server.address().port}/`, close: () => new Promise((r) => server.close(r)) });
-  }));
+  // Our ports are 4961 to 4969. The tests use 4963 to 4968.
+  const ports = port ? [port] : [4963, 4964, 4965, 4966, 4967, 4968];
+  return new Promise((resolve, reject) => {
+    const tryPort = (i) => {
+      if (i >= ports.length) return reject(new Error('No free port in 4963 to 4968.'));
+      server.once('error', () => tryPort(i + 1));
+      server.listen(ports[i], '127.0.0.1', () => {
+        server.removeAllListeners('error');
+        resolve({ url: `http://127.0.0.1:${server.address().port}/`, close: () => new Promise((r) => server.close(r)) });
+      });
+    };
+    tryPort(0);
+  });
 }
 
 export async function launch(opts = {}) {

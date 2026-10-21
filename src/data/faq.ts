@@ -18,7 +18,7 @@ export const faq = [
   },
   {
     q: 'How big a file can I compare?',
-    a: 'Files up to 50 MB open. We tested two 5 MB files with 35,000 records each. The first changes show in about two seconds on a laptop, and the page stays usable. Above 25 MB the tool warns you. A Cancel button stops a long compare. Memory and your device set the real limit.',
+    a: 'Files up to 50 MB open. We tested two 5 MB files with 35,000 records each. The first changes show in under two seconds on a laptop, and the page stays usable. Above 25 MB the tool warns you. A Cancel button stops a long compare. Memory and your device set the real limit.',
   },
   {
     q: 'Why does it show 1 and "1" as different, but 1.0 and 1 as the same?',

@@ -70,9 +70,10 @@ const panes = [
           <h2 class="jd-pane-title" id={`jd-title-${p.side}`}>{p.title}</h2>
           <span class="jd-status" id={`jd-st-${p.side}`} data-state="empty">Empty</span>
           <div class="jd-pane-acts">
-            <button type="button" class="btn-sm" data-act="open">Open file</button>
+            <button type="button" class="btn-sm" data-act="open" title="Open a JSON file" aria-label={`Open a file for ${p.title}`}>Open</button>
             <button type="button" class="btn-sm" data-act="format">Format</button>
             <button type="button" class="btn-sm" data-act="copy">Copy</button>
+            <button type="button" class="btn-sm" data-act="clear">Clear</button>
             <button type="button" class="btn-sm" data-act="collapse" aria-expanded="true" aria-controls={`jd-body-${p.side}`}>Hide</button>
           </div>
           <input type="file" class="sr-only" tabindex="-1" aria-label={`Open a JSON file for ${p.title}`} accept=".json,.jsonl,.txt,application/json,text/plain" />
