@@ -10,7 +10,7 @@ import { url } from '../lib/url.ts';
 
   <h2>Step 1: check if two JSON files are equal</h2>
   <p>Load both files with <code>json.load</code>. Python then compares the parsed values. Key order and spacing do not matter.</p>
-<pre><code>{`import json, sys
+<pre tabindex="0"><code>{`import json, sys
 
 with open(sys.argv[1]) as f1, open(sys.argv[2]) as f2:
     a, b = json.load(f1), json.load(f2)
@@ -19,7 +19,7 @@ print("equal" if a == b else "different")`}</code></pre>
 
   <h2>Step 2: list every change by path</h2>
   <p>This function walks both values at the same time. It yields the kind of change, the path, the old value and the new value.</p>
-<pre><code>{`import json
+<pre tabindex="0"><code>{`import json
 
 def diff(a, b, path="$"):
     """Yield (kind, path, old, new) for every difference between two parsed JSON values."""
@@ -49,7 +49,7 @@ new = json.loads('{"age": 37, "name": "Ada", "tags": ["a", "c", "d"], "email": "
 for kind, path, before, after in diff(old, new):
     print(kind, path, json.dumps(before), json.dumps(after))`}</code></pre>
   <p>The output for the example:</p>
-<pre><code>{`changed $.age 36 37
+<pre tabindex="0"><code>{`changed $.age 36 37
 removed $.city "London" null
 added $.email null "ada@example.com"
 changed $.tags[1] "b" "c"
@@ -58,13 +58,13 @@ added $.tags[2] null "d"`}</code></pre>
 
   <h2>Step 3: get a line diff with difflib</h2>
   <p>If you only want a text view, format both documents the same way and compare the lines. Sorting the keys removes false changes from key order.</p>
-<pre><code>{`import difflib, json
+<pre tabindex="0"><code>{`import difflib, json
 
 a = json.dumps({"a": 1, "b": [1, 2]}, indent=2, sort_keys=True).splitlines()
 b = json.dumps({"a": 2, "b": [1, 2, 3]}, indent=2, sort_keys=True).splitlines()
 print("\\n".join(difflib.unified_diff(a, b, "old.json", "new.json", lineterm="")))`}</code></pre>
   <p>The result is a unified diff, the same format Git uses:</p>
-<pre><code>{`--- old.json
+<pre tabindex="0"><code>{`--- old.json
 +++ new.json
 @@ -1,7 +1,8 @@
  {
@@ -83,7 +83,7 @@ print("\\n".join(difflib.unified_diff(a, b, "old.json", "new.json", lineterm="")
     <li><strong>Array order.</strong> The function above compares items by position. If the same items come in another order, it reports many changes.</li>
     <li><strong>Matching by id.</strong> To pair array items by a key such as <code>id</code>, you must write that code yourself.</li>
     <li><strong>Ignored fields.</strong> Fields such as <code>updatedAt</code> need an extra filter step.</li>
-    <li><strong>Big numbers.</strong> Python keeps big integers exact. A float such as <code>1.0</code> equals <code>1</code>, which may or may not be what you want.</li>
+    <li><strong>1 and 1.0.</strong> The Step 1 check (<code>a == b</code>) says <code>1</code> and <code>1.0</code> are equal. The Step 2 <code>diff()</code> function reports them as changed, because its type check sees an int and a float. This is a strict diff by type. JSON has one number type, and JavaScript compares JSON numbers by value, so most online JSON diff tools, ours included, treat <code>1</code> and <code>1.0</code> as equal. To get that result in Python, skip the type check when both values are numbers but not booleans. Python also keeps big integers exact.</li>
     <li><strong>Reading the result.</strong> Printed lines are fine for ten changes. They are hard to read for hundreds.</li>
   </ul>
 
