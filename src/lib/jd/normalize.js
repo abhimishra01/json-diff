@@ -9,6 +9,7 @@ export function defaultOptions() {
     strings: { ignoreCase: false, trim: false, collapse: false, nfc: false },
     sortKeys: false,
     tolerant: false,
+    overrides: {}, // array path shape -> 'position' | 'order'
   };
 }
 
@@ -28,7 +29,17 @@ export function cleanOptions(o) {
     strings: { ignoreCase: !!s.ignoreCase, trim: !!s.trim, collapse: !!s.collapse, nfc: !!s.nfc },
     sortKeys: !!o.sortKeys,
     tolerant: !!o.tolerant,
+    overrides: cleanOverrides(o.overrides),
   };
+}
+
+function cleanOverrides(x) {
+  const out = {};
+  if (!x || typeof x !== 'object') return out;
+  for (const k of Object.keys(x).slice(0, 50)) {
+    if (k.length <= 300 && (x[k] === 'position' || x[k] === 'order')) out[k] = x[k];
+  }
+  return out;
 }
 
 export function typeOf(v) {
@@ -72,17 +83,14 @@ export function canonNum(x) {
   return x.c;
 }
 
-/** Digits and exponent of a canonical number, or null when it does not fit a double safely. */
-function smallValue(x) {
-  const c = canonNum(x);
-  if (c === '0') return 0;
-  const ePos = c.indexOf('e');
-  const m = c.slice(0, ePos);
-  const digits = m.startsWith('-') ? m.length - 1 : m.length;
-  const e10 = Number(c.slice(ePos + 1));
-  if (digits > 15 || !(e10 > -300 && e10 < 300)) return null;
+/**
+ * The number as a double, or null when a tolerance must not be used on it.
+ * Numbers of 1e15 or more stay exact: a double cannot tell 12345678901234567890 from ...891.
+ */
+function doubleValue(x) {
   const f = Number(x.s);
-  return Number.isFinite(f) ? f : null;
+  if (!Number.isFinite(f) || Math.abs(f) >= 1e15) return null;
+  return f;
 }
 
 /** Parse a tolerance field. Returns a non-negative number or 0. */
@@ -115,9 +123,9 @@ export function numbersEqual(a, b, nopts) {
   const abs = toleranceValue(nopts.abs);
   const rel = toleranceValue(nopts.rel);
   if (abs === 0 && rel === 0) return { eq: false };
-  const x = smallValue(a);
-  const y = smallValue(b);
-  if (x === null || y === null) return { eq: false, note: 'Tolerance not applied to large numbers.' };
+  const x = doubleValue(a);
+  const y = doubleValue(b);
+  if (x === null || y === null) return { eq: false, note: 'Tolerance not applied: a number is too large to compare safely.' };
   const d = Math.abs(x - y);
   // A small slack absorbs the float error of the subtraction itself.
   const slack = 1e-12 * Math.max(Math.abs(x), Math.abs(y), 1e-300);

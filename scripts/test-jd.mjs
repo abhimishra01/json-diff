@@ -7,9 +7,11 @@ import { compileIgnore } from '../src/lib/jd/paths.js';
 import { pretty, compact } from '../src/lib/jd/serialize.js';
 import { locate, jsonPatch, patchText, reportText } from '../src/lib/jd/report.js';
 import { summaryText } from '../src/lib/jd/diff.js';
+import { alignRows, buildView } from '../src/lib/jd/view.js';
 
 let checks = 0;
 const eq = (a, b, msg) => { checks++; assert.deepEqual(a, b, msg); };
+const ok_ = (cond, msg) => { checks++; assert.ok(cond, msg); };
 
 function opts(patch = {}) {
   const o = defaultOptions();
@@ -18,7 +20,7 @@ function opts(patch = {}) {
 }
 function cmp(a, b, patch) {
   const r = compareTexts(a, b, opts(patch));
-  assert.equal(r.state, 'ok', `expected ok: ${JSON.stringify(r)}`);
+  assert.equal(r.state, 'ok', r.state === 'ok' ? '' : `expected ok: ${JSON.stringify(r)}`);
   return r;
 }
 const brief = (r) => r.changes.map((c) => `${c.kind} ${c.path}`);
@@ -106,7 +108,18 @@ eq(cmp('{"n":1.0001}', '{"n":1.0002}', { numbers: { abs: '0' } }).changes.length
 eq(cmp('{"n":1.0001}', '{"n":1.0002}').changes.length, 1, 'J20 default');
 {
   const r = cmp('{"n":100000000000000000000}', '{"n":100000000000000000001}', { numbers: { abs: '5' } });
-  eq([r.changes.length, r.changes[0].note], [1, 'Tolerance not applied to large numbers.'], 'J20 large');
+  eq([r.changes.length, r.changes[0].note], [1, 'Tolerance not applied: a number is too large to compare safely.'], 'J20 large');
+}
+// float noise and long decimals: the tolerance works (spec says "safe double range", not "15 digits")
+eq(cmp('{"n":0.30000000000000004}', '{"n":0.3}', { numbers: { abs: '0.0001' } }).changes.length, 0, 'tolerance on float noise');
+eq(cmp('{"n":0.30000000000000004}', '{"n":0.3}').changes.length, 1, 'float noise without tolerance');
+eq(cmp('{"n":1234567.123456789}', '{"n":1234567.123456788}', { numbers: { abs: '0.001' } }).changes.length, 0, 'tolerance on 16 digits');
+eq(cmp('{"n":0.1}', '{"n":0.1000001}', { numbers: { rel: '0.01' } }).changes.length, 0, 'relative tolerance on a long decimal');
+{
+  // integers of 1e15 and more stay exact; the note says why
+  const r = cmp('{"n":1234567890123456}', '{"n":1234567890123457}', { numbers: { abs: '5' } });
+  eq([r.changes.length, r.changes[0].note], [1, 'Tolerance not applied: a number is too large to compare safely.'], '16-digit integers stay exact');
+  eq(cmp('{"n":999999999999999}', '{"n":999999999999998}', { numbers: { abs: '5' } }).changes.length, 0, '15-digit integers use the tolerance');
 }
 eq(cmp('{"n":100}', '{"n":104}', { numbers: { rel: '5' } }).changes.length, 0, 'relative tolerance');
 eq(cmp('{"n":100}', '{"n":110}', { numbers: { rel: '5' } }).changes.length, 1, 'relative tolerance exceeded');
@@ -125,6 +138,30 @@ eq(cmp('{"s":"A"}', '{"s":"a"}').changes.length, 1, 'J23');
 eq(cmp('{"s":"A"}', '{"s":"a"}', { strings: { ignoreCase: true } }).changes.length, 0, 'J23 ignore case');
 eq(cmp('{"s":" a  b "}', '{"s":"a b"}').changes.length, 1, 'J24 default');
 eq(cmp('{"s":" a  b "}', '{"s":"a b"}', { strings: { trim: true, collapse: true } }).changes.length, 0, 'J24');
+
+// ---- Ignore order also applies to nested arrays (regression review)
+eq(cmp('[{"tags":["a","b"]}]', '[{"tags":["b","a"]}]', { arrays: { mode: 'order' } }).changes.length, 0, 'nested arrays, no other field');
+eq(cmp('{"u":[{"tags":["a","b"],"x":{"y":[3,2,1]}}]}', '{"u":[{"x":{"y":[1,2,3]},"tags":["b","a"]}]}', { arrays: { mode: 'order' } }).changes.length, 0, 'deeper nesting');
+eq(cmp('[["a","b"],["c"]]', '[["c"],["b","a"]]', { arrays: { mode: 'order' } }).changes.length, 0, 'arrays of arrays');
+eq(brief(cmp('[{"tags":["a","b"]}]', '[{"tags":["b","c"]}]', { arrays: { mode: 'order' } })).length > 0, true, 'a real difference still shows');
+eq(cmp('[{"tags":["a","b"]}]', '[{"tags":["b","a"]}]', { arrays: { mode: 'position' } }).changes.length, 2, 'by position the same pair differs');
+// tolerance also works for loose numbers under Ignore order
+eq(cmp('[1.0001, 5]', '[5, 1.0002]', { arrays: { mode: 'order' }, numbers: { abs: '0.01' } }).changes.length, 0, 'order mode uses the tolerance');
+// per-array override: users by key, roles ignore order
+{
+  const a = '{"users":[{"id":1,"roles":["a","b"]},{"id":2,"roles":["c"]}]}';
+  const b = '{"users":[{"id":2,"roles":["c"]},{"id":1,"roles":["b","a"]}]}';
+  eq(cmp(a, b).changes.length, 2, 'auto: roles by position differ');
+  const r = cmp(a, b, { overrides: { '$.users[].roles': 'order' } });
+  eq(r.changes.length, 0, 'override: roles ignore order, users still by id');
+  eq(r.choices.map((c) => `${c.path} ${c.mode}`).sort(), ['$.users key', '$.users[].roles order']);
+  // a hint when Auto picks position for a shuffled list
+  const h = cmp(a, b);
+  eq(h.hints.map((x) => x.path), ['$.users[].roles'], 'hint for shuffled roles');
+  eq(cmp('{"o":[{"q":1},{"q":2},{"q":3}]}', '{"o":[{"q":3},{"q":1},{"q":2}]}').hints.map((x) => x.path), ['$.o'], 'hint for a shuffle of objects');
+  eq(cmp('{"o":[1,2,3]}', '{"o":[4,5,6]}').hints, [], 'no hint when the items are different');
+  eq(cmp('{"o":[1,2,3]}', '{"o":[1,2,3]}').hints, [], 'no hint when nothing changed');
+}
 
 // ---- J25: ignore paths
 {
@@ -225,6 +262,10 @@ eq(parse('﻿{"a":1}').ok, true, 'E16');
   eq(pretty(parse(deep2).value).lines.length, 20001, 'pretty on deep input');
 }
 // more error shapes
+expectErr('mismatch value', '{"a":[}', 1, 7, 'This `}` does not match. The open bracket is `[`.');
+expectErr('mismatch key', '{]', 1, 2, 'This `]` does not match. The open bracket is `{`.');
+expectErr('mismatch after colon', '{"a":]', 1, 6, 'This `]` does not match. The open bracket is `{`.');
+expectErr('stray close', '}', 1, 1, 'This `}` has no matching `{`.');
 expectErr('mismatch', '{"a":[1}', 1, 8, 'This `}` does not match. The open bracket is `[`.');
 expectErr('colon', '{"a" 1}', 1, 6, 'A colon is missing after the key.');
 expectErr('trailing array comma', '[1,]', 1, 4, 'Extra comma after the last item. Remove it.');
@@ -287,6 +328,82 @@ expectErr('hex escape', '["\\u12"]', 1, 3, 'A `\\u` escape needs 4 hex digits, f
 {
   const r = cmp('{"a":1}', '{"a":2}');
   eq(reportText(r.summaryText, r.changes), '1 change: 1 changed\n\n~ $.a: 1 -> 2\n', 'report text');
+}
+
+// ---- JSON Patch round trip: apply the patch to A and get B (RFC 6902, position mode)
+{
+  const apply = (doc, ops) => {
+    const get = (parts) => parts.reduce((o, k) => o[k], doc);
+    for (const op of ops) {
+      const parts = op.path === '' ? [] : op.path.slice(1).split('/').map((x) => x.replace(/~1/g, '/').replace(/~0/g, '~'));
+      if (!parts.length) { doc = op.value; continue; }
+      const last = parts.pop();
+      const parent = get(parts);
+      if (op.op === 'remove') { if (Array.isArray(parent)) parent.splice(Number(last), 1); else delete parent[last]; }
+      else if (op.op === 'replace') parent[Array.isArray(parent) ? Number(last) : last] = op.value;
+      else if (Array.isArray(parent)) parent.splice(last === '-' ? parent.length : Number(last), 0, op.value);
+      else parent[last] = op.value;
+    }
+    return doc;
+  };
+  const pairs = [
+    ['{"a":1,"b":[1,2]}', '{"a":2,"b":[1,2,3],"c":true}'],
+    ['[1,2,3,4]', '[1,2]'],
+    ['{"x":[{"a":1},{"a":2}],"y":[5,6,7]}', '{"x":[{"a":1,"z":1}],"y":[5]}'],
+    ['{"a":{"b":1}}', '[1]'],
+    ['{"a/b":1,"m~n":2,"k":3}', '{"k":4}'],
+    ['{"a":[1,[2,3]]}', '{"a":[1,[2,3,4]]}'],
+    ['{}', '{"a":{"b":[1,{"c":null}]}}'],
+  ];
+  for (const [a, b] of pairs) {
+    const r = cmp(a, b, { arrays: { mode: 'position' } });
+    const ops = JSON.parse(patchText(jsonPatch(r.changes, r.trees)));
+    eq(apply(JSON.parse(a), ops), JSON.parse(b), `patch round trip ${a} -> ${b}`);
+  }
+  // exact number text in the patch
+  const r = cmp('{"n":1}', '{"n":12345678901234567890.5e2}', { arrays: { mode: 'position' } });
+  ok_(patchText(jsonPatch(r.changes, r.trees)).includes('12345678901234567890.5e2'), 'patch keeps number text');
+}
+
+// ---- side by side: rows line up around added and removed lines
+{
+  eq(Array.from(alignRows(4, 3, [[1, 1, -1, -1]]).rowsA), [0, 1, 2, 3], 'removed line: A rows');
+  eq(Array.from(alignRows(4, 3, [[1, 1, -1, -1]]).rowsB), [0, -1, 1, 2], 'removed line: B gets a filler');
+  eq(Array.from(alignRows(3, 4, [[-1, -1, 1, 1]]).rowsA), [0, -1, 1, 2], 'added line: A gets a filler');
+  // a scalar that becomes an object (1 line to 3 lines)
+  const t = alignRows(3, 5, [[1, 1, 1, 3]]);
+  eq([Array.from(t.rowsA), Array.from(t.rowsB)], [[0, 1, -1, -1, 2], [0, 1, 2, 3, 4]], 'type change with more lines');
+  // moved blocks that cannot line up are skipped, never crash or lose lines
+  const m = alignRows(6, 6, [[0, 1, 4, 5], [4, 5, 0, 1]]);
+  eq([m.rowsA.length >= 6, new Set(Array.from(m.rowsA).filter((x) => x >= 0)).size], [true, 6], 'moved blocks keep every line');
+}
+{
+  const { SAMPLE_A, SAMPLE_B } = await import('../src/lib/jd/sample.js');
+  const r = cmp(SAMPLE_A, SAMPLE_B);
+  const v = buildView(r.trees, r.changes, false);
+  const text = (lines, rows, i) => (rows[i] >= 0 ? lines[rows[i]].trim() : null);
+  let level = 0;
+  for (let i = 0; i < v.rowsA.length; i++) {
+    const x = text(v.a, v.rowsA, i);
+    if (x && x === text(v.b, v.rowsB, i) && /"(status|notes|items|retries)"|^\{$|^\}$/.test(x.split(':')[0] + '')) level++;
+  }
+  ok_(level >= 2, 'equal lines meet on the same row');
+  // the tags array gets a new item: A shows a filler row there
+  const rowOfNew = v.lineRowB[v.b.findIndex((l) => l.trim() === '"new"')];
+  eq(v.rowsA[rowOfNew], -1, 'filler row opposite an added line');
+  eq(v.rowsA.length, v.rowsB.length);
+  // every line is on exactly one row
+  eq(new Set(Array.from(v.rowsA).filter((x) => x >= 0)).size, v.a.length, 'all A lines are shown');
+  eq(new Set(Array.from(v.rowsB).filter((x) => x >= 0)).size, v.b.length, 'all B lines are shown');
+}
+
+// ---- deep nesting is fast now that paths are built lazily
+{
+  const deep = '['.repeat(10000) + '1' + ']'.repeat(10000);
+  const deep2 = '['.repeat(10000) + '2' + ']'.repeat(10000);
+  const t0 = Date.now();
+  cmp(deep, deep2);
+  ok_(Date.now() - t0 < 1500, `10,000 levels deep in under 1.5 s (took ${Date.now() - t0} ms)`);
 }
 
 // ---- cache: a second compare with other options reuses the parse

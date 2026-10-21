@@ -14,7 +14,7 @@ export function compact(v, limit = 1000) {
   const scalar = (x) => {
     if (x === null) return 'null';
     if (x instanceof Num) return x.s;
-    if (typeof x === 'string') return JSON.stringify(x.length > limit ? x.slice(0, limit) : x);
+    if (typeof x === 'string') return x.length > limit ? JSON.stringify(x.slice(0, limit)).slice(0, -1) + '\u2026"' : JSON.stringify(x);
     return String(x);
   };
   for (;;) {
@@ -83,7 +83,6 @@ export function pretty(root, opts = {}) {
   let depth = 0;
   let cur = root;
   let curPtr = '';
-  let first = true;
   for (;;) {
     // write cur
     if (want && want.has(curPtr)) lineOf.set(curPtr, lines.length);
@@ -133,60 +132,58 @@ export function pretty(root, opts = {}) {
       f.i++;
       break;
     }
-    first = false;
   }
 }
 
 /**
  * Canonical text of a value under the compare options. Equal values give equal text.
- * Keys are sorted. Numbers use the canonical value form unless "as written" is on.
+ * Keys are sorted. Array items are sorted too, because this is only used by "Ignore order",
+ * where the order of items at any depth does not matter.
+ * Numbers use the canonical value form unless "as written" is on.
+ * Built bottom-up with an explicit stack, so deep nesting cannot overflow the call stack.
  */
 export function canonical(root, opts) {
   const written = opts.numbers.mode === 'written';
   const sn = stringsAreNormalized(opts.strings);
   const so = opts.strings;
-  let out = '';
-  const stack = [];
-  let cur = root;
-  for (;;) {
-    if (cur instanceof Map) {
-      if (cur.size === 0) out += '{}';
-      else {
-        out += '{';
-        const ks = Array.from(cur.keys());
-        ks.sort();
-        stack.push({ obj: true, src: cur, keys: ks, i: 0 });
-        cur = undefined;
-      }
-    } else if (Array.isArray(cur)) {
-      if (cur.length === 0) out += '[]';
-      else {
-        out += '[';
-        stack.push({ obj: false, src: cur, keys: null, i: 0 });
-        cur = undefined;
-      }
-    } else if (cur === null) out += 'null';
-    else if (cur instanceof Num) out += written ? 'n' + cur.s : 'n' + canonNum(cur);
-    else if (typeof cur === 'string') out += JSON.stringify(sn ? normString(cur, so) : cur);
-    else if (cur !== undefined) out += String(cur);
-    cur = undefined;
-    for (;;) {
-      const f = stack[stack.length - 1];
-      if (!f) return out;
-      const size = f.obj ? f.keys.length : f.src.length;
-      if (f.i >= size) {
-        out += f.obj ? '}' : ']';
-        stack.pop();
-        continue;
-      }
-      if (f.i > 0) out += ',';
-      if (f.obj) {
-        const k = f.keys[f.i];
-        out += JSON.stringify(k) + ':';
-        cur = f.src.get(k);
-      } else cur = f.src[f.i];
-      f.i++;
-      break;
+  const scalar = (v) => {
+    if (v === null) return 'null';
+    if (v instanceof Num) return written ? 'n' + v.s : 'n' + canonNum(v);
+    if (typeof v === 'string') return JSON.stringify(sn ? normString(v, so) : v);
+    return String(v);
+  };
+  const isBox = (v) => v instanceof Map || Array.isArray(v);
+  if (!isBox(root)) return scalar(root);
+  // frame: { obj, src, keys, i, parts, prefix } ; prefix is the key text the finished frame goes under
+  const open = (v, prefix) => {
+    const obj = v instanceof Map;
+    let keys = null;
+    if (obj) {
+      keys = Array.from(v.keys());
+      keys.sort();
     }
+    return { obj, src: v, keys, i: 0, size: obj ? keys.length : v.length, parts: [], prefix };
+  };
+  const stack = [open(root, '')];
+  for (;;) {
+    const f = stack[stack.length - 1];
+    if (f.i >= f.size) {
+      stack.pop();
+      if (!f.obj) f.parts.sort();
+      const text = (f.obj ? '{' : '[') + f.parts.join(',') + (f.obj ? '}' : ']');
+      if (stack.length === 0) return text;
+      stack[stack.length - 1].parts.push(f.prefix + text);
+      continue;
+    }
+    let prefix = '';
+    let child;
+    if (f.obj) {
+      const k = f.keys[f.i];
+      prefix = JSON.stringify(k) + ':';
+      child = f.src.get(k);
+    } else child = f.src[f.i];
+    f.i++;
+    if (isBox(child)) stack.push(open(child, prefix));
+    else f.parts.push(prefix + scalar(child));
   }
 }

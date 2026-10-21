@@ -4,6 +4,7 @@
 import { compareTexts, ParseCache } from './compare.js';
 import { parse } from './parse.js';
 import { pretty } from './serialize.js';
+import { buildView } from './view.js';
 import { jsonPatch, patchText } from './report.js';
 
 const CHUNK = 500;
@@ -36,6 +37,7 @@ function onCompare(msg) {
     summaryText: r.summaryText,
     warnings: r.warnings,
     choices: r.choices,
+    hints: r.hints,
     ignored: r.ignored,
     total: r.changes.length,
     items: r.changes.slice(0, CHUNK),
@@ -59,45 +61,13 @@ function onFormat(msg) {
   post({ type: 'formatted', id: msg.id, ok: true, text: pretty(p.value).lines.join('\n') });
 }
 
-// Where a block that starts at line s ends: the closing bracket line with the same indent.
-function blockEnd(lines, s) {
-  const t = lines[s];
-  const last = t.charCodeAt(t.length - 1);
-  const lastNoComma = last === 44 ? t.charCodeAt(t.length - 2) : last;
-  if (lastNoComma !== 123 && lastNoComma !== 91) return s;
-  let ind = 0;
-  while (t.charCodeAt(ind) === 32) ind++;
-  for (let k = s + 1; k < lines.length; k++) {
-    const u = lines[k];
-    let j = 0;
-    while (u.charCodeAt(j) === 32) j++;
-    if (j === ind) return k;
-  }
-  return s;
-}
-
 function onView(msg) {
   if (!last) {
     post({ type: 'view', id: msg.id, ok: false });
     return;
   }
-  const wantA = new Set();
-  const wantB = new Set();
-  for (const c of last.changes) {
-    if (c.ptrA !== null) wantA.add(c.ptrA);
-    if (c.ptrB !== null) wantB.add(c.ptrB);
-  }
-  const a = pretty(last.trees.a, { sortKeys: msg.sortKeys, want: wantA });
-  const b = pretty(last.trees.b, { sortKeys: msg.sortKeys, want: wantB });
-  // For each change: first line and last line in each document (-1 when the side has none).
-  const spans = new Array(last.changes.length);
-  for (let i = 0; i < last.changes.length; i++) {
-    const c = last.changes[i];
-    const sa = c.ptrA !== null && a.lineOf.has(c.ptrA) ? a.lineOf.get(c.ptrA) : -1;
-    const sb = c.ptrB !== null && b.lineOf.has(c.ptrB) ? b.lineOf.get(c.ptrB) : -1;
-    spans[i] = [sa, sa >= 0 ? blockEnd(a.lines, sa) : -1, sb, sb >= 0 ? blockEnd(b.lines, sb) : -1];
-  }
-  post({ type: 'view', id: msg.id, ok: true, a: a.lines, b: b.lines, spans });
+  const v = buildView(last.trees, last.changes, msg.sortKeys);
+  post({ type: 'view', id: msg.id, ok: true, ...v });
 }
 
 function onPatch(msg) {

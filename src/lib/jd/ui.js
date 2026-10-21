@@ -9,6 +9,7 @@ import { SAMPLE_A, SAMPLE_B } from './sample.js';
 const OPT_KEY = 'bm.jsondiff.opts.v1';
 const PAGE = 500; // rows drawn at once
 const ROW_H = 20; // side by side line height in px (matches the CSS)
+const PREVIEW_CHARS = 200000;
 const LIVE_DELAY = 400; // ms of no typing before a live compare
 const BIG_CHARS = 5_000_000;
 const BIG_AT = 1_000_000; // above this many characters a box shows a preview, not the whole text
@@ -50,13 +51,15 @@ export function initTool() {
     texts: { a: '', b: '' },
     big: { a: null, b: null }, // full text of a large input (the box then shows a preview)
     sides: { a: { error: null }, b: { error: null } },
-    view: null, // { a, b, spans, markA, markB, sortKeys }
-    viewSeq: 0,
+    view: null, // data for the side by side tab, see view.js
+    reqId: 0, // ids for requests to the worker (view, patch, format)
     cur: -1,
     jump: false,
     choices: [],
     ignored: { patterns: 0, places: 0 },
     pending: new Map(), // id -> callback for format and patch requests
+    hints: [],
+    warnings: [],
   };
 
   const ta = { a: $('jd-in-a'), b: $('jd-in-b') };
@@ -66,13 +69,13 @@ export function initTool() {
     ignore: $('jd-ignore'), ignoreErr: $('jd-ignore-err'),
     numMode: root.querySelectorAll('input[name="jd-nummode"]'), abs: $('jd-abs'), rel: $('jd-rel'),
     sIgnoreCase: $('jd-s-case'), sTrim: $('jd-s-trim'), sCollapse: $('jd-s-collapse'), sNfc: $('jd-s-nfc'),
-    sortKeys: $('jd-sortkeys'), sortKeys2: $('jd-sortkeys2'), tolerant: $('jd-tolerant'),
+    sortKeys: $('jd-sortkeys'), tolerant: $('jd-tolerant'),
     live: $('jd-live'), empty: $('jd-empty'), msg: $('jd-msg'), res: $('jd-res'),
     sumText: $('jd-sum-text'), filters: $('jd-filters'), info: $('jd-info'),
-    list: $('jd-list'), listNote: $('jd-list-note'), more: $('jd-more'), sentinel: $('jd-sentinel'),
+    list: $('jd-list'), listNote: $('jd-list-note'), more: $('jd-more'),
     tabList: $('jd-tab-list'), tabSbs: $('jd-tab-sbs'), panelList: $('jd-panel-list'), panelSbs: $('jd-panel-sbs'),
     progress: $('jd-progress'), progBar: $('jd-progbar'), progText: $('jd-progtext'), cancel: $('jd-cancel'),
-    copyReport: $('jd-copy-report'), download: $('jd-download'), copyPatch: $('jd-copy-patch'), patchNote: $('jd-patch-note'),
+    copyReport: $('jd-copy-report'), download: $('jd-download'), copyPatch: $('jd-copy-patch'),
     toast: $('jd-toast'), bar: $('jd-phonebar'),
     prev: $('jd-prev'), next: $('jd-next'), curLabel: $('jd-cur'), sbsNote: $('jd-sbs-note'),
   };
@@ -124,12 +127,13 @@ export function initTool() {
   function loadOptions() {
     try {
       const raw = localStorage.getItem(OPT_KEY);
-      if (raw) return cleanOptions(JSON.parse(raw));
+      if (raw) return { ...cleanOptions(JSON.parse(raw)), tolerant: false };
     } catch {}
     return defaultOptions();
   }
   function saveOptions() {
-    try { localStorage.setItem(OPT_KEY, JSON.stringify(S.opts)); } catch {}
+    // Comments-allowed mode is not remembered: a strict check is the safe default on every visit.
+    try { localStorage.setItem(OPT_KEY, JSON.stringify({ ...S.opts, tolerant: false })); } catch {}
   }
   function optsToForm() {
     const o = S.opts;
@@ -145,7 +149,7 @@ export function initTool() {
     el.sTrim.checked = o.strings.trim;
     el.sCollapse.checked = o.strings.collapse;
     el.sNfc.checked = o.strings.nfc;
-    el.sortKeys.checked = el.sortKeys2.checked = o.sortKeys;
+    el.sortKeys.checked = o.sortKeys;
     el.tolerant.checked = o.tolerant;
     renderChips();
     renderIgnoreErrors();
@@ -184,6 +188,8 @@ export function initTool() {
       const name = { position: 'by position', key: `by key${o.arrays.key ? ' ' + o.arrays.key : ''}`, order: 'ignore order' }[o.arrays.mode];
       chips.push({ text: `Arrays: ${name}`, off: off(() => { o.arrays.mode = 'auto'; }) });
     }
+    const nOv = Object.keys(o.overrides).length;
+    if (nOv) chips.push({ text: `Array overrides: ${nOv}`, off: off(() => { o.overrides = {}; }) });
     const pats = compileIgnore(o.ignore).patterns.length;
     if (pats) chips.push({ text: `Ignore paths: ${pats}`, off: off(() => { o.ignore = ''; }) });
     if (o.numbers.mode === 'written') chips.push({ text: 'Numbers as written', off: off(() => { o.numbers.mode = 'value'; }) });
@@ -220,6 +226,8 @@ export function initTool() {
   const gutters = { a: $('jd-gut-a'), b: $('jd-gut-b') };
   const errLines = { a: $('jd-errline-a'), b: $('jd-errline-b') };
   const gutterCount = { a: 0, b: 0 };
+  // Line height of the editors, read from the page so zoom and font settings keep the marker on the line.
+  const lineHeight = () => parseFloat(getComputedStyle(ta.a).lineHeight) || ROW_H;
   function countLines(t) {
     let n = 1;
     let p = t.indexOf('\n');
@@ -248,8 +256,10 @@ export function initTool() {
     const e = S.sides[side].error;
     const m = errLines[side];
     if (!e) { m.hidden = true; return; }
-    const top = 8 + (e.line - 1) * ROW_H - ta[side].scrollTop;
-    if (top < -ROW_H || top > ta[side].clientHeight) { m.hidden = true; return; }
+    const lh = lineHeight();
+    const top = 8 + (e.line - 1) * lh - ta[side].scrollTop;
+    m.style.height = lh + 'px';
+    if (top < -lh || top > ta[side].clientHeight) { m.hidden = true; return; }
     m.hidden = false;
     m.style.transform = `translateY(${top}px)`;
   }
@@ -286,13 +296,21 @@ export function initTool() {
     S.big[side] = full;
     let end = 0;
     for (let i = 0; i < PREVIEW_LINES && end !== -1; i++) end = full.indexOf('\n', end + 1);
-    if (end === -1 || end > 200000) end = Math.min(200000, full.length);
-    ta[side].value = full.slice(0, end) + '\n\u2026';
+    const byChars = end === -1 || end > PREVIEW_CHARS;
+    let cut = end;
+    if (byChars) {
+      // Few long lines (minified JSON): cut after a comma so the preview does not stop inside a token.
+      cut = Math.min(PREVIEW_CHARS, full.length);
+      const comma = full.lastIndexOf(',', cut);
+      if (comma > cut - 2000) cut = comma + 1;
+    }
+    ta[side].value = full.slice(0, cut) + '\n\u2026';
     ta[side].readOnly = true;
     const mb = (full.length / 1048576).toFixed(1);
     const lines = countLines(full);
     $('jd-big-' + side).hidden = false;
-    $('jd-bigtext-' + side).textContent = `Large input: ${mb} MB, ${fmtNum(lines)} lines. The box shows the first ${fmtNum(Math.min(lines, PREVIEW_LINES))} lines. The whole text is compared.`;
+    const shown = byChars ? `the first ${fmtNum(cut)} characters` : `the first ${fmtNum(PREVIEW_LINES)} lines`;
+    $('jd-bigtext-' + side).textContent = `Large input: ${mb} MB, ${fmtNum(lines)} ${lines === 1 ? 'line' : 'lines'}. The box shows ${shown}. The whole text is compared.`;
     updateGutter(side);
   }
   function leaveBig(side) {
@@ -361,7 +379,7 @@ export function initTool() {
   }
   function revealOffset(side, line, col) {
     const t = ta[side];
-    t.scrollTop = Math.max(0, (line - 1) * ROW_H - t.clientHeight / 2);
+    t.scrollTop = Math.max(0, (line - 1) * lineHeight() - t.clientHeight / 2);
     const cw = charWidth(t);
     t.scrollLeft = Math.max(0, (col - 1) * cw - t.clientWidth / 2);
     gutters[side].scrollTop = t.scrollTop;
@@ -380,9 +398,16 @@ export function initTool() {
   }
 
   // ----- worker -----
+  const nextId = () => ++S.reqId;
   function getWorker() {
     if (S.worker) return S.worker;
-    const w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    let w;
+    try {
+      w = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+    } catch {
+      showMessage('This browser cannot run the compare. Try a current version of Chrome, Edge, Firefox or Safari.');
+      return null;
+    }
     w.onmessage = (e) => onWorker(e.data);
     w.onerror = () => {
       S.running = false;
@@ -395,6 +420,10 @@ export function initTool() {
   function resetWorker() {
     if (S.worker) S.worker.terminate();
     S.worker = null;
+    // Format and patch requests that were waiting will never be answered: tell their buttons.
+    const waiting = [...S.pending.values()];
+    S.pending.clear();
+    for (const cb of waiting) cb({ ok: false, lost: true });
   }
 
   function requestCompare(delay, jump) {
@@ -425,7 +454,6 @@ export function initTool() {
     S.running = true;
     S.texts = { a, b };
     const id = S.seq;
-    S.runStart = performance.now();
     clearTimeout(S.progTimer);
     S.progTimer = setTimeout(() => {
       if (S.running && S.seq === id) {
@@ -433,7 +461,9 @@ export function initTool() {
         showProgress(S.bigWarn ? 'This may take a while.' : 'Working', 0);
       }
     }, 400);
-    getWorker().postMessage({ type: 'compare', id, a, b, opts: S.opts });
+    const w = getWorker();
+    if (!w) { S.running = false; return; }
+    w.postMessage({ type: 'compare', id, a, b, opts: S.opts });
   }
 
   function onWorker(m) {
@@ -529,6 +559,7 @@ export function initTool() {
     S.changes = m.items.slice();
     S.loaded = m.items.length;
     S.choices = m.choices;
+    S.hints = m.hints;
     S.ignored = m.ignored;
     S.warnings = m.warnings;
     S.sumTextRaw = m.summaryText;
@@ -582,22 +613,28 @@ export function initTool() {
     const has = s.total > 0;
     el.copyReport.hidden = el.download.hidden = !has;
     el.copyPatch.hidden = !has;
-    el.patchNote.hidden = true;
     el.tabList.parentElement.hidden = !has;
     if (!has) setTab('list');
     updatePatchButton();
   }
   function renderInfo() {
     const parts = [];
-    const ch = S.choices;
+    const ch = S.choices.slice(0, 8);
     if (ch.length) {
-      const names = ch.slice(0, 6).map((c) => {
-        const where = c.path === '$' ? 'the root array' : '<code>' + esc(c.path.replace(/^\$\.?/, '')) + '</code>';
-        const how = c.mode === 'key' ? `by <code>${esc(c.key)}</code>` : c.mode === 'order' ? 'ignoring order' : 'by position';
-        return `${where} ${how}`;
+      const items = ch.map((c) => {
+        const where = c.path === '$' ? 'root array' : esc(c.path.replace(/^\$\.?/, ''));
+        const how = c.mode === 'key' ? `by ${esc(c.key)}` : c.mode === 'order' ? 'ignoring order' : 'by position';
+        const ov = S.opts.overrides[c.path] || 'auto';
+        const autoLabel = ov === 'auto' ? `Auto (${how})` : 'Auto';
+        const sel = ['auto', 'position', 'order'].map((v) => `<option value="${v}"${v === ov ? ' selected' : ''}>${v === 'auto' ? autoLabel : v === 'position' ? 'By position' : 'Ignore order'}</option>`).join('');
+        return `<label class="choice"><code>${where}</code><select class="ctl ctl-sm" data-ov="${esc(c.path)}" aria-label="How to match ${where}">${sel}</select></label>`;
       });
-      const more = ch.length > 6 ? ` and ${ch.length - 6} more` : '';
-      parts.push(`<p class="info-line">Matching arrays: ${names.join(', ')}${more}. <button type="button" class="link" data-act="open-arrays">Change</button></p>`);
+      const more = S.choices.length > 8 ? `<span class="info-line">and ${S.choices.length - 8} more</span>` : '';
+      parts.push(`<div class="info-choices"><span class="info-line">Matching arrays:</span>${items.join('')}${more}</div>`);
+    }
+    for (const h of S.hints) {
+      const where = h.path === '$' ? 'The root array' : '<code>' + esc(h.path.replace(/^\$\.?/, '')) + '</code>';
+      parts.push(`<p class="info-hint">${where} has mostly the same items in a different order. <button type="button" class="link" data-hint="${esc(h.path)}">Ignore order here</button></p>`);
     }
     if (S.ignored.patterns) {
       parts.push(`<p class="info-line">Ignored: ${S.ignored.patterns} ${S.ignored.patterns === 1 ? 'pattern' : 'patterns'}, ${fmtNum(S.ignored.places)} ${S.ignored.places === 1 ? 'place' : 'places'}.</p>`);
@@ -707,12 +744,6 @@ export function initTool() {
     el.listNote.hidden = txt === '';
   }
   el.more.addEventListener('click', () => renderList(false));
-  if ('IntersectionObserver' in window) {
-    new IntersectionObserver((entries) => {
-      if (entries.some((x) => x.isIntersecting) && S.resultOk && S.tab === 'list' && S.shown < S.filtered.length) renderList(false);
-    }, { rootMargin: '600px' }).observe(el.sentinel);
-  }
-
   el.list.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-act]');
     if (!b) return;
@@ -779,16 +810,16 @@ export function initTool() {
   }));
 
   // ----- side by side -----
+  // One row per pair of lines. The worker lines the two documents up (see view.js), so a row can
+  // hold a line on one side and a blank filler on the other. Both panes scroll as one.
   class VList {
-    constructor(vp, sizer, win) {
-      this.vp = vp; this.sizer = sizer; this.win = win;
-      this.lines = []; this.marks = null; this.side = 'a';
+    constructor(side, vp, sizer, win) {
+      this.side = side; this.vp = vp; this.sizer = sizer; this.win = win;
       this.raf = 0;
-      vp.addEventListener('scroll', () => { this.schedule(); if (this.onscroll) this.onscroll(this); }, { passive: true });
+      vp.addEventListener('scroll', () => { this.schedule(); if (this.onscroll) this.onscroll(); }, { passive: true });
     }
-    set(lines, marks) {
-      this.lines = lines; this.marks = marks;
-      this.sizer.style.height = lines.length * ROW_H + 'px';
+    set(rows) {
+      this.sizer.style.height = rows * ROW_H + 'px';
       this.vp.scrollTop = 0;
       this.render();
     }
@@ -797,17 +828,29 @@ export function initTool() {
       this.raf = requestAnimationFrame(() => { this.raf = 0; this.render(); });
     }
     render() {
+      const v = S.view;
+      if (!v) return;
+      const rows = this.side === 'a' ? v.rowsA : v.rowsB;
+      const lines = this.side === 'a' ? v.a : v.b;
+      const marks = this.side === 'a' ? v.markA : v.markB;
       const h = this.vp.clientHeight || 400;
       const first = Math.max(0, Math.floor(this.vp.scrollTop / ROW_H) - 5);
-      const last = Math.min(this.lines.length, first + Math.ceil(h / ROW_H) + 12);
+      const last = Math.min(rows.length, first + Math.ceil(h / ROW_H) + 12);
       this.win.style.transform = `translateY(${first * ROW_H}px)`;
       const frag = document.createDocumentFragment();
-      const spans = S.view && S.cur >= 0 ? S.view.spans[S.cur] : null;
-      const curLo = spans ? (this.side === 'a' ? spans[0] : spans[2]) : -1;
-      const curHi = spans ? (this.side === 'a' ? spans[1] : spans[3]) : -1;
-      for (let i = first; i < last; i++) {
+      const sp = S.cur >= 0 ? v.spans[S.cur] : null;
+      const curLo = sp ? (this.side === 'a' ? sp[0] : sp[2]) : -1;
+      const curHi = sp ? (this.side === 'a' ? sp[1] : sp[3]) : -1;
+      for (let r = first; r < last; r++) {
+        const i = rows[r];
         const d = document.createElement('div');
-        const ci = this.marks ? this.marks[i] : -1;
+        if (i < 0) {
+          d.className = 'sl fill';
+          d.setAttribute('aria-hidden', 'true');
+          frag.appendChild(d);
+          continue;
+        }
+        const ci = marks[i];
         let cls = 'sl';
         let mk = '';
         if (ci >= 0) {
@@ -816,7 +859,7 @@ export function initTool() {
           mk = KIND[c.kind].sym;
           d.dataset.ci = ci;
         }
-        if (i >= curLo && i <= curHi && curLo >= 0) cls += ' cur';
+        if (curLo >= 0 && i >= curLo && i <= curHi) cls += ' cur';
         d.className = cls;
         const n = document.createElement('span');
         n.className = 'sn';
@@ -827,32 +870,27 @@ export function initTool() {
         m.textContent = mk;
         const t = document.createElement('span');
         t.className = 'st';
-        t.textContent = this.lines[i];
+        t.textContent = lines[i];
         d.append(n, m, t);
         frag.appendChild(d);
       }
       this.win.replaceChildren(frag);
     }
-    scrollToLine(i) {
-      this.vp.scrollTop = Math.max(0, i * ROW_H - this.vp.clientHeight / 2 + ROW_H);
+    scrollToRow(r) {
+      this.vp.scrollTop = Math.max(0, r * ROW_H - this.vp.clientHeight / 2 + ROW_H);
       this.render();
     }
   }
   const vl = {
-    a: new VList($('jd-sv-a'), $('jd-sz-a'), $('jd-sw-a')),
-    b: new VList($('jd-sv-b'), $('jd-sz-b'), $('jd-sw-b')),
+    a: new VList('a', $('jd-sv-a'), $('jd-sz-a'), $('jd-sw-a')),
+    b: new VList('b', $('jd-sv-b'), $('jd-sz-b'), $('jd-sw-b')),
   };
-  vl.a.side = 'a';
-  vl.b.side = 'b';
-  // Both panes scroll together. The gap between them is kept, so a change that was
-  // lined up with "next change" stays lined up while you scroll.
   let syncing = false;
-  let gap = 0; // scrollTop of B minus scrollTop of A
-  for (const [x, y, sign] of [[vl.a, vl.b, 1], [vl.b, vl.a, -1]]) {
+  for (const [x, y] of [[vl.a, vl.b], [vl.b, vl.a]]) {
     x.onscroll = () => {
       if (syncing) return;
       syncing = true;
-      y.vp.scrollTop = Math.max(0, x.vp.scrollTop + sign * gap);
+      y.vp.scrollTop = x.vp.scrollTop;
       y.vp.scrollLeft = x.vp.scrollLeft;
       requestAnimationFrame(() => { syncing = false; });
     };
@@ -860,14 +898,16 @@ export function initTool() {
 
   function loadView() {
     if (!S.resultOk) return;
-    if (S.view && S.view.sortKeys === S.opts.sortKeys && S.view.seq === S.seq) { showView(); return; }
-    const id = ++S.viewSeq;
+    if (S.view && S.view.sortKeys === S.opts.sortKeys && S.view.compareId === S.seq) { showView(); return; }
+    const id = nextId();
     el.sbsNote.textContent = 'Loading…';
-    getWorker().postMessage({ type: 'view', id, sortKeys: S.opts.sortKeys });
-    S.viewWait = { id, seq: S.seq };
+    const w = getWorker();
+    if (!w) return;
+    w.postMessage({ type: 'view', id, sortKeys: S.opts.sortKeys });
+    S.viewWait = { id, compareId: S.seq };
   }
   function onView(m) {
-    if (!S.viewWait || m.id !== S.viewWait.id || S.viewWait.seq !== S.seq) return;
+    if (!S.viewWait || m.id !== S.viewWait.id || S.viewWait.compareId !== S.seq) return;
     if (!m.ok) { el.sbsNote.textContent = 'Compare first to see both documents.'; return; }
     const mark = (n, side) => {
       const arr = new Int32Array(n).fill(-1);
@@ -879,14 +919,18 @@ export function initTool() {
       }
       return arr;
     };
-    S.view = { sortKeys: S.opts.sortKeys, seq: S.seq, spans: m.spans, a: m.a, b: m.b, markA: mark(m.a.length, 'a'), markB: mark(m.b.length, 'b') };
+    S.view = {
+      sortKeys: S.opts.sortKeys, compareId: S.seq, spans: m.spans, a: m.a, b: m.b,
+      rowsA: m.rowsA, rowsB: m.rowsB, lineRowA: m.lineRowA, lineRowB: m.lineRowB,
+      markA: mark(m.a.length, 'a'), markB: mark(m.b.length, 'b'),
+    };
     showView();
   }
   function showView() {
-    const v = S.view;
     el.sbsNote.textContent = S.ignored.patterns ? 'Ignored paths are hidden here.' : '';
-    vl.a.set(v.a, v.markA);
-    vl.b.set(v.b, v.markB);
+    const rows = S.view.rowsA.length;
+    vl.a.set(rows);
+    vl.b.set(rows);
     updateCurLabel();
   }
   function updateCurLabel() {
@@ -902,16 +946,15 @@ export function initTool() {
   }
   function selectChange(ci) {
     S.cur = ci;
-    const sp = S.view.spans[ci];
-    const la = sp[0] >= 0 ? sp[0] : sp[2] >= 0 ? sp[2] : 0;
-    const lb = sp[2] >= 0 ? sp[2] : sp[0] >= 0 ? sp[0] : 0;
+    const v = S.view;
+    const sp = v.spans[ci];
+    const rowA = sp[0] >= 0 ? v.lineRowA[sp[0]] : -1;
+    const rowB = sp[2] >= 0 ? v.lineRowB[sp[2]] : -1;
+    const row = Math.max(0, rowA >= 0 ? rowA : rowB);
     syncing = true;
-    vl.a.scrollToLine(la);
-    vl.b.scrollToLine(lb);
-    gap = vl.b.vp.scrollTop - vl.a.vp.scrollTop;
+    vl.a.scrollToRow(row);
+    vl.b.scrollToRow(row);
     requestAnimationFrame(() => { syncing = false; });
-    vl.a.render();
-    vl.b.render();
     updateCurLabel();
   }
   el.prev.addEventListener('click', () => goChange(-1));
@@ -937,56 +980,64 @@ export function initTool() {
     root.querySelectorAll('.jd-sbs-col').forEach((c) => { c.dataset.hide = String(c.dataset.col !== b.dataset.sbs); });
     const side = b.dataset.sbs;
     const other = side === 'a' ? vl.b : vl.a;
-    vl[side].vp.scrollTop = other.vp.scrollTop || vl[side].vp.scrollTop;
+    vl[side].vp.scrollTop = other.vp.scrollTop;
     vl[side].render();
   }));
 
   // ----- report, patch -----
-  function waitAllLoaded() {
-    return S.loaded >= S.total;
-  }
+  const allLoaded = () => S.loaded >= S.total;
+  // The report follows the filter: with "added" and "removed" on, it lists only those.
   function buildReport() {
+    const list = S.kinds.size ? S.filtered : S.changes.filter(Boolean);
     const extra = [];
+    if (S.kinds.size) extra.push(`Filter: ${[...S.kinds].join(', ')} (${fmtNum(list.length)} of ${fmtNum(S.total)} changes)`);
     const chips = activeChips().map((c) => c.text);
     if (chips.length) extra.push('Options: ' + chips.join('; '));
-    return reportText(S.sumTextRaw, S.changes.filter(Boolean), extra);
+    if (list.some((c) => /\u2026"?$/.test(c.a || '') || /\u2026"?$/.test(c.b || ''))) extra.push('Values longer than 2,000 characters are shortened.');
+    return reportText(S.sumTextRaw, list, extra);
   }
   el.copyReport.addEventListener('click', () => {
-    if (!waitAllLoaded()) { toast('Still loading changes. Try again in a moment.'); return; }
-    copyText(buildReport(), 'Report copied');
+    if (!allLoaded()) { toast('Still loading changes. Try again in a moment.'); return; }
+    copyText(buildReport(), S.kinds.size ? 'Filtered report copied' : 'Report copied');
   });
   el.download.addEventListener('click', () => {
-    if (!waitAllLoaded()) { toast('Still loading changes. Try again in a moment.'); return; }
+    if (!allLoaded()) { toast('Still loading changes. Try again in a moment.'); return; }
     download('json-diff-report.txt', buildReport());
   });
   function patchBlocked() {
-    // A patch needs positions. Matching by key or by content can move items.
+    // A patch needs positions. Matching by key or by content can move items, and ignored paths shift indexes.
     if (S.choices.some((c) => c.mode !== 'position')) return 'Set Arrays to By position to make a patch.';
+    if (S.ignored.patterns) return 'Turn off Ignore paths to make a patch.';
     return '';
   }
   function updatePatchButton() {
     const why = S.resultOk && S.total ? patchBlocked() : '';
     el.copyPatch.disabled = !!why;
     el.copyPatch.title = why || 'JSON Patch (RFC 6902)';
-    el.patchNote.hidden = true;
     S.patchWhy = why;
     if (S.resultOk) renderInfo();
   }
+  // Ask the worker for something and call back with the answer (or { ok: false } if the worker was reset).
+  function askWorker(msg, cb) {
+    const w = getWorker();
+    if (!w) return;
+    const id = nextId();
+    S.pending.set(id, cb);
+    w.postMessage({ ...msg, id });
+  }
+  const retry = () => toast('That was interrupted. Try again.');
   el.copyPatch.addEventListener('click', () => {
-    const id = ++S.viewSeq;
-    S.pending.set(id, (m) => { if (m.ok) copyText(m.text, 'JSON Patch copied'); else toast('Could not make a patch.'); });
-    getWorker().postMessage({ type: 'patch', id });
+    askWorker({ type: 'patch' }, (m) => { if (m.ok) copyText(m.text, 'JSON Patch copied'); else if (m.lost) retry(); else toast('Could not make a patch.'); });
   });
 
   // ----- pane buttons -----
   function formatSide(side) {
-    const id = ++S.viewSeq;
-    S.pending.set(id, (m) => {
+    askWorker({ type: 'format', text: getText(side), tolerant: S.opts.tolerant }, (m) => {
+      if (m.lost) { retry(); return; }
       if (!m.ok) { showSideError(side, m.error); return; }
       setText(side, m.text, false);
       requestCompare(0);
     });
-    getWorker().postMessage({ type: 'format', id, text: getText(side), tolerant: S.opts.tolerant });
   }
   function openFile(side, file) {
     if (!file) return;
@@ -1020,6 +1071,7 @@ export function initTool() {
       if (g) gotoError(g.dataset.goto);
       const bb = e.target.closest('[data-big]');
       if (bb && bb.dataset.big === 'edit') editAsText(side);
+      else if (bb && bb.dataset.big === 'format') formatSide(side);
       else if (bb && bb.dataset.big === 'clear') { setText(side, '', false); requestCompare(0); ta[side].focus(); }
     });
     fileInput.addEventListener('change', () => { openFile(side, fileInput.files[0]); fileInput.value = ''; });
@@ -1084,14 +1136,12 @@ export function initTool() {
     x.addEventListener('change', () => { formToOpts(); optsToForm(); requestCompare(0); });
   }
   for (const x of [el.abs, el.rel]) x.addEventListener('input', () => { formToOpts(); renderChips(); requestCompare(LIVE_DELAY); });
-  for (const x of [el.sortKeys, el.sortKeys2]) {
-    x.addEventListener('change', () => {
-      S.opts.sortKeys = x.checked;
-      saveOptions();
-      optsToForm();
-      if (S.tab === 'sbs') loadView();
-    });
-  }
+  el.sortKeys.addEventListener('change', () => {
+    S.opts.sortKeys = el.sortKeys.checked;
+    saveOptions();
+    optsToForm();
+    if (S.tab === 'sbs') loadView();
+  });
   el.optBtn.addEventListener('click', () => toggleOptions());
   function toggleOptions(force) {
     const open = force !== undefined ? force : el.optPanel.hidden;
@@ -1104,11 +1154,21 @@ export function initTool() {
     optsToForm();
     requestCompare(0);
   });
+  // Matching arrays: each array has its own choice, and a hint can switch one to Ignore order.
+  function setOverride(path, mode) {
+    if (mode === 'auto') delete S.opts.overrides[path];
+    else S.opts.overrides[path] = mode;
+    saveOptions();
+    renderChips();
+    requestCompare(0);
+  }
+  el.info.addEventListener('change', (e) => {
+    const sel = e.target.closest('select[data-ov]');
+    if (sel) setOverride(sel.dataset.ov, sel.value);
+  });
   el.info.addEventListener('click', (e) => {
-    if (e.target.closest('[data-act=open-arrays]')) {
-      if (isPhone()) { el.arrays.scrollIntoView({ block: 'center' }); }
-      el.arrays.focus();
-    }
+    const h = e.target.closest('[data-hint]');
+    if (h) setOverride(h.dataset.hint, 'order');
   });
   root.querySelectorAll('[data-act=sample-empty]').forEach((b) => b.addEventListener('click', () => $('jd-sample').click()));
 

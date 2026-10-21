@@ -16,9 +16,6 @@ export class ParseCache {
     this.slots[side] = { text, tolerant, result };
     return result;
   }
-  clear() {
-    this.slots = { a: null, b: null };
-  }
 }
 
 /**
@@ -67,6 +64,7 @@ export function compareTexts(textA, textB, rawOpts, cache = new ParseCache(), on
     summaryText: summaryText(summary),
     warnings,
     choices: d.choices,
+    hints: d.hints,
     ignored: { patterns: ig.patterns.length, places, errors: ig.errors },
     trees: { a: A, b: B },
   };

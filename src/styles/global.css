@@ -149,7 +149,7 @@ textarea.ctl { padding: 8px 10px; width: 100%; line-height: 1.5; resize: vertica
 .jd-big[hidden] { display: none; }
 .jd-big > span { flex: 1 1 14rem; }
 .jd-ta:read-only { background: var(--paper); }
-.jd-editor { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); height: 240px; min-height: 120px; max-height: 80vh; resize: vertical; overflow: hidden; border: 1px solid var(--edge); border-radius: 12px; background: var(--card); }
+.jd-editor { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); height: 200px; min-height: 120px; max-height: 80vh; resize: vertical; overflow: hidden; border: 1px solid var(--edge); border-radius: 12px; background: var(--card); }
 .jd-editor:focus-within { outline: 3px solid var(--brand-ink); outline-offset: 2px; }
 .jd-gutter, .jd-ta { font-family: var(--mono); font-size: 14px; line-height: 20px; margin: 0; }
 .jd-gutter { overflow: hidden; padding: 8px 8px 24px 8px; text-align: right; color: var(--muted); background: var(--paper); border-right: 1px solid var(--line); user-select: none; min-width: 3ch; }
@@ -185,6 +185,12 @@ textarea.ctl { padding: 8px 10px; width: 100%; line-height: 1.5; resize: vertica
 .jd-filter[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px currentColor; }
 .jd-sum-acts { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
 .jd-info { margin-top: 8px; display: grid; gap: 4px; }
+.info-choices { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.choice { display: inline-flex; align-items: center; gap: 6px; font-size: .9375rem; color: var(--muted); }
+.choice code { color: var(--ink); background: var(--brand-soft); border-radius: 4px; padding: 0 .3em; }
+.ctl-sm { min-height: 36px; padding: 0 8px; font-size: .875rem; }
+.info-hint { margin: 0; font-size: .9375rem; color: var(--typ-ink); background: var(--typ-bg); border-left: 3px solid var(--typ-edge); border-radius: 6px; padding: 5px 10px; }
+.info-hint code { background: none; padding: 0; }
 .info-line, .info-warn { margin: 0; font-size: .9375rem; color: var(--muted); }
 .info-warn { color: var(--chg-ink); background: var(--chg-bg); border-left: 3px solid var(--chg-edge); border-radius: 6px; padding: 5px 10px; }
 .warn-mark { display: inline-grid; place-items: center; width: 1.1rem; height: 1.1rem; border-radius: 999px; background: var(--chg-edge); color: var(--chg-bg); font-weight: 800; font-size: .75rem; margin-right: 4px; }
@@ -239,6 +245,7 @@ textarea.ctl { padding: 8px 10px; width: 100%; line-height: 1.5; resize: vertica
 .sl.m-removed { background: var(--del-bg); color: var(--del-ink); cursor: pointer; }
 .sl.m-type { background: var(--typ-bg); color: var(--typ-ink); cursor: pointer; }
 .sl.m-changed .sn, .sl.m-added .sn, .sl.m-removed .sn, .sl.m-type .sn { color: inherit; opacity: .8; }
+.sl.fill { background: repeating-linear-gradient(135deg, transparent 0 6px, color-mix(in oklab, var(--line-strong) 55%, transparent) 6px 7px); }
 .sl.cur { box-shadow: inset 3px 0 0 var(--brand-ink), inset 0 0 0 1px var(--brand-ink); }
 
 .jd-toast { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 40; max-width: min(92vw, 28rem); background: var(--ink); color: var(--paper); border-radius: 10px; padding: 10px 16px; font-size: .9375rem; box-shadow: 0 8px 24px rgb(0 0 0 / .25); }
@@ -249,9 +256,13 @@ textarea.ctl { padding: 8px 10px; width: 100%; line-height: 1.5; resize: vertica
   .jd { min-height: 40rem; padding-bottom: 64px; }
   .jd-panes { grid-template-columns: minmax(0, 1fr); }
   .jd-editor { height: 160px; }
-  .btn-sm, .mini { min-height: 44px; }
+  .btn-sm, .mini, .jd-filter, .jd-chip, .ctl-sm { min-height: 44px; }
+  .link { min-height: 44px; display: inline-flex; align-items: center; }
+  .jd-check { min-height: 44px; }
+  .info-hint .link { display: inline-flex; }
   .mini { padding: 0 12px; }
-  .jd-ta, .jd-gutter { font-size: 14px; }
+  /* 16 px stops iPhone Safari from zooming in when the box gets focus */
+  .jd-ta, .jd-gutter { font-size: 16px; }
   .jd-bar .btn-primary { display: none; }
   .jd-bar { gap: 8px; }
   .jd-bar > .btn:nth-child(-n+3) { flex: 1 1 28%; padding: 0 8px; }

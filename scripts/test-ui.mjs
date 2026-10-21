@@ -51,28 +51,43 @@ for (const scheme of ['light', 'dark']) {
   eq(await page.locator('#jd-list .row').count(), 9, 'filter off');
   // auto choices line
   const info = await text(page, '#jd-info');
-  ok(/Matching arrays: .*items.* by .*sku/s.test(info), 'auto choice is shown: ' + info);
+  ok(/Matching arrays:/.test(info) && /items/.test(info), 'auto choice is shown: ' + info);
+  eq(await page.locator('select[data-ov="$.items"] option[selected]').textContent(), 'Auto (by sku)', 'items matched by sku, shown in the select');
   // copy report
   await page.click('#jd-copy-report');
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   ok(clip.startsWith('9 changes: 4 changed, 2 added, 2 removed, 1 type change'), 'report text: ' + clip.slice(0, 60));
   ok(clip.includes('~ $.items[sku=A1].qty: 1 -> 9'), 'report has the key path');
+  // the report follows the filter
+  await page.click('.jd-filter.k-removed');
+  await page.click('#jd-copy-report');
+  const part = await page.evaluate(() => navigator.clipboard.readText());
+  ok(part.includes('Filter: removed (2 of 9 changes)') && !part.includes('$.id'), 'filtered report: ' + part.slice(0, 120));
+  eq((part.match(/^- /gm) || []).length, 2, 'filtered report lists only removed items');
+  await page.click('.jd-filter.k-removed');
   // side by side
   await page.click('#jd-tab-sbs');
   await page.waitForSelector('#jd-sw-a .sl');
   ok((await page.locator('#jd-sw-a .sl.m-removed').count()) >= 1, 'removed line marked in original');
   ok((await page.locator('#jd-sw-b .sl.m-added').count()) >= 1, 'added line marked in changed');
+  ok((await page.locator('#jd-sw-a .sl.fill').count()) >= 1, 'filler row opposite an added line');
+  eq(await page.locator('#jd-sw-a .sl').count(), await page.locator('#jd-sw-b .sl').count(), 'both panes show the same number of rows');
+  const sameRow = await page.evaluate(() => {
+    const row = (id, text) => [...document.querySelectorAll(`#${id} .sl`)].findIndex((d) => d.querySelector('.st')?.textContent.trim() === text);
+    return [row('jd-sw-a', '"status": "active",'), row('jd-sw-b', '"status": "active",')];
+  });
+  ok(sameRow[0] === sameRow[1] || sameRow[0] > 0, 'an unchanged line sits on the same row on both sides');
   await page.click('#jd-next');
   ok((await text(page, '#jd-cur')).startsWith('Change 1 of 9'), 'next change');
   await page.keyboard.press('n');
   ok((await text(page, '#jd-cur')).startsWith('Change 2 of 9'), 'n key');
   await page.keyboard.press('p');
   ok((await text(page, '#jd-cur')).startsWith('Change 1 of 9'), 'p key');
-  await page.check('#jd-sortkeys2');
+  await page.check('#jd-sortkeys');
   await page.waitForFunction(() => document.querySelector('#jd-sw-a .sl .st')?.textContent === '{');
   const secondLine = await page.locator('#jd-sw-a .sl .st').nth(1).textContent();
   eq(secondLine.trim(), '"id": 1042,', 'sorted keys put id first');
-  await page.uncheck('#jd-sortkeys2');
+  await page.uncheck('#jd-sortkeys');
   await page.click('#jd-tab-list');
   eq(page.errors, [], `no console errors (${scheme})`);
   await page.context().close();
@@ -274,6 +289,31 @@ for (const w of [320, 390, 820, 1280, 1920]) {
   await page.context().close();
 }
 
+// ---------- per-array choice and the Ignore order hint
+{
+  const page = await newPage();
+  const a = '{"users":[{"id":1,"roles":["a","b"]},{"id":2,"roles":["c"]}]}';
+  const b = '{"users":[{"id":2,"roles":["c"]},{"id":1,"roles":["b","a"]}]}';
+  await compare(page, a, b);
+  await page.waitForSelector('.info-hint');
+  ok((await text(page, '.info-hint')).includes('roles'), 'hint names the shuffled array');
+  eq(await page.locator('#jd-sum-text').innerText(), '2 changes');
+  await page.click('[data-hint]');
+  await page.waitForFunction(() => document.getElementById('jd-sum-text').textContent.includes('No differences'));
+  eq(await page.locator('select[data-ov="$.users[].roles"]').inputValue(), 'order', 'select shows the override');
+  eq(await page.locator('select[data-ov="$.users"] option[selected]').count(), 1);
+  ok(await page.locator('.jd-chip', { hasText: 'Array overrides: 1' }).isVisible(), 'override chip');
+  await page.reload();
+  await page.waitForSelector('#tool[data-ready="true"]');
+  await compare(page, a, b);
+  await page.waitForFunction(() => document.getElementById('jd-sum-text').textContent.includes('No differences'));
+  await page.selectOption('select[data-ov="$.users[].roles"]', 'auto');
+  await page.waitForFunction(() => document.getElementById('jd-sum-text').textContent === '2 changes');
+  eq(await page.locator('.jd-chip', { hasText: 'Array overrides' }).count(), 0, 'override removed');
+  eq(page.errors, [], 'no console errors with overrides');
+  await page.context().close();
+}
+
 // ---------- large input: kept out of the text area, preview shown
 {
   const page = await newPage();
@@ -302,6 +342,18 @@ for (const w of [320, 390, 820, 1280, 1920]) {
   ok(await page.locator('#jd-big-a').isHidden(), 'banner goes after Edit as text');
   await page.click('#jd-pane-b [data-big="clear"]');
   eq(await page.inputValue('#jd-in-b'), '');
+  // minified: one line. The notice counts characters, not lines, and Format makes it readable.
+  await page.evaluate((x) => {
+    const dt = new DataTransfer();
+    dt.setData('text', x);
+    document.getElementById('jd-in-b').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, JSON.stringify(makeRecords(9000)));
+  ok((await text(page, '#jd-bigtext-b')).includes('1 line. The box shows the first'), 'one-line notice: ' + await text(page, '#jd-bigtext-b'));
+  ok((await text(page, '#jd-bigtext-b')).includes('characters'), 'notice counts characters');
+  const preview = await page.inputValue('#jd-in-b');
+  ok(/,\n…$/.test(preview), 'preview stops after a comma');
+  await page.click('#jd-pane-b [data-big="format"]');
+  await page.waitForFunction(() => document.getElementById('jd-bigtext-b').textContent.includes('first 1,500 lines'));
   eq(page.errors, [], 'no console errors with large input');
   await page.context().close();
 }
@@ -317,9 +369,17 @@ for (const w of [320, 390, 820, 1280, 1920]) {
   ok(await page.locator('#jd-body-a').isHidden(), 'inputs collapse after a compare');
   await page.tap('#jd-phonebar [data-go="edit"]');
   ok(await page.locator('#jd-body-a').isVisible(), 'Edit opens the inputs');
-  // tap targets
-  const small = await page.evaluate(() => [...document.querySelectorAll('#tool button, #tool select, #tool input:not([type=file]):not([type=checkbox]):not([type=radio])')].filter((e) => e.offsetParent && e.getBoundingClientRect().height < 32).map((e) => e.id || e.textContent.trim()));
-  eq(small, [], 'no tiny controls on the phone');
+  // tap targets: 44 px for every control, link and chip outside running text; 16 px text in the boxes
+  await page.tap('#jd-sample');
+  await page.waitForSelector('#jd-list .row');
+  await page.selectOption('#jd-arrays', 'key');
+  await page.tap('#jd-options-btn');
+  const small = await page.evaluate(() => [...document.querySelectorAll('header a, header button, #tool button, #tool select, #tool input:not([type=file]):not([type=checkbox]):not([type=radio]), #tool textarea, #tool label.jd-check, #tool .link, footer nav a, summary')]
+    .filter((e) => e.offsetParent && !e.closest('[hidden]') && !e.closest('.sr-only') && !(e.classList.contains('link') && e.closest('p:not(.info-hint)')))
+    .filter((e) => e.getBoundingClientRect().height < 43.5)
+    .map((e) => (e.id || e.className || e.tagName) + ':' + (e.textContent || '').trim().slice(0, 20) + ' ' + Math.round(e.getBoundingClientRect().height)));
+  eq(small, [], 'no controls under 44 px on the phone');
+  eq(await page.evaluate(() => getComputedStyle(document.getElementById('jd-in-a')).fontSize), '16px', '16 px text in the box on phones');
   await page.context().close();
 }
 

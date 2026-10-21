@@ -10,7 +10,7 @@ const panes = [
   <div class="jd-bar" role="group" aria-label="Actions">
     <button type="button" id="jd-sample" class="btn">Sample</button>
     <button type="button" id="jd-swap" class="btn">Swap</button>
-    <button type="button" id="jd-clear" class="btn">Clear</button>
+    <button type="button" id="jd-clear" class="btn">Clear both</button>
     <span class="jd-sep" aria-hidden="true"></span>
     <label class="jd-field" for="jd-arrays">Arrays
       <select id="jd-arrays" class="ctl">
@@ -54,8 +54,7 @@ const panes = [
       <label class="jd-check"><input type="checkbox" id="jd-s-nfc" /> Normalize Unicode (NFC)</label>
     </fieldset>
     <fieldset class="jd-set">
-      <legend>View and reading</legend>
-      <label class="jd-check"><input type="checkbox" id="jd-sortkeys" /> Sort keys in side by side</label>
+      <legend>Reading</legend>
       <label class="jd-check"><input type="checkbox" id="jd-tolerant" /> Allow comments and trailing commas (not strict JSON)</label>
       <button type="button" id="jd-reset-opts" class="btn-sm">Reset all options</button>
     </fieldset>
@@ -67,7 +66,7 @@ const panes = [
     {panes.map((p) => (
       <div class="jd-pane" id={`jd-pane-${p.side}`}>
         <div class="jd-pane-head">
-          <h2 class="jd-pane-title" id={`jd-title-${p.side}`}>{p.title}</h2>
+          <p class="jd-pane-title" id={`jd-title-${p.side}`}>{p.title}</p>
           <span class="jd-status" id={`jd-st-${p.side}`} data-state="empty">Empty</span>
           <div class="jd-pane-acts">
             <button type="button" class="btn-sm" data-act="open" title="Open a JSON file" aria-label={`Open a file for ${p.title}`}>Open</button>
@@ -81,6 +80,7 @@ const panes = [
         <div class="jd-body" id={`jd-body-${p.side}`}>
           <div class="jd-big" id={`jd-big-${p.side}`} hidden>
             <span id={`jd-bigtext-${p.side}`}></span>
+            <button type="button" class="btn-sm" data-big="format">Format</button>
             <button type="button" class="btn-sm" data-big="edit">Edit as text</button>
             <button type="button" class="btn-sm" data-big="clear">Clear</button>
           </div>
@@ -122,7 +122,6 @@ const panes = [
           <button type="button" id="jd-copy-patch" class="btn-sm" title="JSON Patch (RFC 6902)">Copy JSON Patch</button>
         </div>
       </div>
-      <p id="jd-patch-note" class="hint" hidden></p>
       <div id="jd-info" class="jd-info"></div>
       <div class="jd-tabs-wrap">
         <div class="jd-tabs" role="tablist" aria-label="Result view">
@@ -134,13 +133,12 @@ const panes = [
         <ol id="jd-list" class="jd-list"></ol>
         <p id="jd-list-note" class="hint" hidden></p>
         <button type="button" id="jd-more" class="btn" hidden>Show more</button>
-        <div id="jd-sentinel" aria-hidden="true"></div>
       </div>
       <div role="tabpanel" id="jd-panel-sbs" aria-labelledby="jd-tab-sbs" hidden>
         <div class="jd-sbs-bar">
           <button type="button" id="jd-prev" class="btn-sm" aria-keyshortcuts="p">Previous change</button>
           <button type="button" id="jd-next" class="btn-sm" aria-keyshortcuts="n">Next change</button>
-          <label class="jd-check"><input type="checkbox" id="jd-sortkeys2" /> Sort keys</label>
+          <label class="jd-check"><input type="checkbox" id="jd-sortkeys" /> Sort keys</label>
           <span id="jd-cur" class="jd-cur" aria-live="polite"></span>
         </div>
         <div class="jd-sbs-switch" role="group" aria-label="Show one document">
@@ -150,11 +148,11 @@ const panes = [
         <p id="jd-sbs-note" class="hint"></p>
         <div class="jd-sbs" id="jd-sbs">
           <div class="jd-sbs-col" data-col="a">
-            <h3 class="jd-sbs-title">Original</h3>
+            <p class="jd-sbs-title">Original</p>
             <div class="jd-sv" id="jd-sv-a" tabindex="0" role="region" aria-label="Original, formatted"><div class="jd-sz" id="jd-sz-a"><div class="jd-sw" id="jd-sw-a"></div></div></div>
           </div>
           <div class="jd-sbs-col" data-col="b" data-hide="true">
-            <h3 class="jd-sbs-title">Changed</h3>
+            <p class="jd-sbs-title">Changed</p>
             <div class="jd-sv" id="jd-sv-b" tabindex="0" role="region" aria-label="Changed, formatted"><div class="jd-sz" id="jd-sz-b"><div class="jd-sw" id="jd-sw-b"></div></div></div>
           </div>
         </div>

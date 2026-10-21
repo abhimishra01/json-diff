@@ -1,14 +1,12 @@
 // Text report, JSON Patch (RFC 6902) and finding a value in the source text.
 import { ptrSegments } from './paths.js';
-import { typeOf } from './normalize.js';
-
-const TYPE_WORD = { object: 'object', array: 'array', string: 'string', number: 'number', boolean: 'boolean', null: 'null' };
+import { pretty } from './serialize.js';
 
 export function changeLine(c) {
   switch (c.kind) {
     case 'added': return `+ ${c.path}: ${c.b}`;
     case 'removed': return `- ${c.path}: ${c.a}`;
-    case 'type': return `T ${c.path}: ${c.a} (${TYPE_WORD[c.aType]}) -> ${c.b} (${TYPE_WORD[c.bType]})`;
+    case 'type': return `T ${c.path}: ${c.a} (${c.aType}) -> ${c.b} (${c.bType})`;
     default: return `~ ${c.path}: ${c.a} -> ${c.b}` + (c.note ? ` (${c.note.replace(/\.$/, '')})` : '');
   }
 }
@@ -164,33 +162,20 @@ function valueAt(root, ptr) {
   for (const seg of ptrSegments(ptr)) {
     cur = cur instanceof Map ? cur.get(seg) : cur[Number(seg)];
   }
-  return toPlain(cur);
+  return cur;
 }
 
-/** Convert the value model to plain JS for JSON.stringify (numbers keep their text through a marker pass). */
-function toPlain(v) {
-  if (v instanceof Map) {
-    const o = {};
-    for (const [k, x] of v) o[k] = toPlain(x);
-    return o;
-  }
-  if (Array.isArray(v)) return v.map(toPlain);
-  if (typeOf(v) === 'number') return RawNumber(v.s);
-  return v;
-}
-function RawNumber(s) {
-  return { __raw: s };
-}
-
-/** Stringify a patch, writing numbers exactly as they were written. */
+/** Write a patch as JSON text. Values keep their number text exactly. */
 export function patchText(ops) {
-  const raw = [];
-  const text = JSON.stringify(ops, (k, v) => {
-    if (v && typeof v === 'object' && '__raw' in v && Object.keys(v).length === 1) {
-      raw.push(v.__raw);
-      return '__RAW' + (raw.length - 1) + '__';
+  const out = ops.map((op) => {
+    const lines = ['  {', `    "op": ${JSON.stringify(op.op)},`, `    "path": ${JSON.stringify(op.path)}${'value' in op ? ',' : ''}`];
+    if ('value' in op) {
+      const v = pretty(op.value, { indent: 2 }).lines;
+      lines.push('    "value": ' + v[0]);
+      for (let i = 1; i < v.length; i++) lines.push('    ' + v[i]);
     }
-    return v;
-  }, 2);
-  return text.replace(/"__RAW(\d+)__"/g, (m, n) => raw[Number(n)]);
+    lines.push('  }');
+    return lines.join('\n');
+  });
+  return out.length ? '[\n' + out.join(',\n') + '\n]' : '[]';
 }

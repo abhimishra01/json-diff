@@ -29,6 +29,10 @@ jobs:
         env:
           PAGES_BASE: /json-diff/
           PAGES_SITE: https://abhimishra01.github.io
+      # Privacy test and page test in Chrome (the ubuntu runner has Google Chrome installed).
+      # The build is served under /json-diff/, the way GitHub Pages serves it.
+      - run: google-chrome --version
+      - run: node scripts/run-browser-tests.mjs dist json-diff/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

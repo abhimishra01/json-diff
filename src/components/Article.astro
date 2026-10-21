@@ -9,7 +9,7 @@
 
     <h2>How to compare two JSON files</h2>
     <ol>
-      <li>Paste the first JSON into <strong>Original</strong> and the second into <strong>Changed</strong>. You can also drop a file on a box or press <strong>Open file</strong>.</li>
+      <li>Paste the first JSON into <strong>Original</strong> and the second into <strong>Changed</strong>. You can also drop a file on a box or press <strong>Open</strong>.</li>
       <li>Read the list of changes. Each row shows the kind of change, the path, and the values. The list updates while you type.</li>
       <li>Set options if you need them: how to match arrays, which fields to ignore, and the rules for numbers and text. Options that are on show as chips under the toolbar.</li>
     </ol>
@@ -30,7 +30,7 @@
 
     <h2>Compare arrays by position, by key or ignoring order</h2>
     <p>Arrays are the hard part of a JSON compare. Take two lists of three records with the ids 1, 2 and 3. In the second list the records come in another order, and record 1 has a new value. Compared by position, item 1 meets item 1, item 2 meets item 2, and so on. Every item sits in a different place, so the tool reports 6 changes.</p>
-    <p>Compared by key <code>id</code>, each record meets the record with the same id. The tool reports one change: <code>$.u[id=1].v</code>. This is what most people want when they compare API responses.</p>
+    <p>Compared by key <code>id</code>, each record meets the record with the same id. The tool reports one change: <code>$.u[id=1].v</code>. This is the usual choice when you compare API responses.</p>
     <p>The default, <strong>Auto</strong>, looks for a field that every item has and that never repeats. It tries <code>id</code>, <code>uuid</code>, <code>_id</code>, <code>key</code>, <code>sku</code>, <code>code</code>, <code>slug</code>, <code>email</code> and <code>name</code>, in this order. It tells you what it chose above the result, with a link to change it. If the ids repeat, Auto falls back to position and shows a warning.</p>
     <p><strong>Ignore order</strong> matches items that are equal, wherever they sit. It then pairs the items that are left by the number of fields they share, so a changed item shows as changed and not as removed plus added.</p>
 

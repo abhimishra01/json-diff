@@ -261,19 +261,26 @@ export function parse(text, opts = {}) {
   // Why a character cannot start a value.
   const badValueStart = (ch) => {
     const top = conts.length ? conts[conts.length - 1] : null;
-    if (ch === '}' || ch === ',') {
+    if (ch === '}' || ch === ']') {
+      if (!top) return `This \`${ch}\` has no matching \`${ch === '}' ? '{' : '['}\`.`;
+      const open = top instanceof Map ? '{' : '[';
+      if ((ch === '}') !== (top instanceof Map)) return `This \`${ch}\` does not match. The open bracket is \`${open}\`.`;
       if (top instanceof Map) return 'A value is missing after the colon.';
-      if (ch === ',') return 'A value is missing before the comma.';
+      return 'A value is missing before `]`.';
     }
-    if (ch === ']') return 'A value is missing before `]`.';
+    if (ch === ',') {
+      if (top instanceof Map) return 'A value is missing after the colon.';
+      return 'A value is missing before the comma.';
+    }
     if (ch === ':') return 'A colon cannot start a value. A key or a value is missing.';
     if (ch === "'") return 'Keys and strings need double quotes (`"`), not single quotes.';
     if (ch === '/') return 'Comments are not allowed in JSON. Turn on Tolerant mode to allow them.';
     if (ch === '+') return 'Numbers cannot start with `+`. Remove it.';
     if (ch === '.') return 'Numbers cannot start with a decimal point. Write `0.5`, not `.5`.';
-    if (ch === '}') return 'This `}` has no matching `{`.';
     return `Unexpected ${showChar(ch)}. A value is expected here.`;
   };
+
+  let keyed = 0; // offset of the last key (for duplicate warnings)
 
   // Read an object key at text[i] (after white space). Then the colon. Returns key string or error object.
   const readKeyAndColon = () => {
@@ -292,6 +299,8 @@ export function parse(text, opts = {}) {
       return fail(i, 'A key is missing before the comma.');
     } else if (kc === 125) {
       return fail(i, 'Extra comma after the last item. Remove it.');
+    } else if (kc === 93) {
+      return fail(i, 'This `]` does not match. The open bracket is `{`.');
     } else if (kc === 47 && !tolerant) {
       return fail(i, 'Comments are not allowed in JSON. Turn on Tolerant mode to allow them.');
     } else {
@@ -305,8 +314,6 @@ export function parse(text, opts = {}) {
     keyed = keyStart;
     return key;
   };
-  let keyed = 0; // offset of the last key (for duplicate warnings)
-
   let root;
   let v;
   let e0 = skipWs();

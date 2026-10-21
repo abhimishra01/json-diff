@@ -1,17 +1,10 @@
 // Path helpers: display paths, JSON Pointers, and the "ignore paths" patterns (JSONPath-lite).
-import { Num } from './parse.js';
 
 const SIMPLE_KEY = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-/** Add an object key to a display path: $.name or $["odd key"]. */
-export function keyPath(path, key) {
-  return SIMPLE_KEY.test(key) ? path + '.' + key : path + '[' + JSON.stringify(key) + ']';
-}
-export function indexPath(path, i) {
-  return path + '[' + i + ']';
-}
-export function matchPath(path, keyName, shown) {
-  return path + '[' + keyName + '=' + shown + ']';
+/** Display segment for an object key: .name or ["odd key"]. */
+export function keySeg(key) {
+  return SIMPLE_KEY.test(key) ? '.' + key : '[' + JSON.stringify(key) + ']';
 }
 
 /** JSON Pointer segment escape (RFC 6901). */
@@ -224,4 +217,3 @@ export function applyIgnore(root, patterns) {
   return { tree: outRoot, places };
 }
 
-export { Num };
