@@ -274,7 +274,7 @@ export function parse(text, opts = {}) {
     }
     if (ch === ':') return 'A colon cannot start a value. A key or a value is missing.';
     if (ch === "'") return 'Keys and strings need double quotes (`"`), not single quotes.';
-    if (ch === '/') return 'Comments are not allowed in JSON. Turn on Tolerant mode to allow them.';
+    if (ch === '/') return 'Comments are not allowed in JSON. To allow them, open Options and turn on "Allow comments and trailing commas".';
     if (ch === '+') return 'Numbers cannot start with `+`. Remove it.';
     if (ch === '.') return 'Numbers cannot start with a decimal point. Write `0.5`, not `.5`.';
     return `Unexpected ${showChar(ch)}. A value is expected here.`;
@@ -302,7 +302,7 @@ export function parse(text, opts = {}) {
     } else if (kc === 93) {
       return fail(i, 'This `]` does not match. The open bracket is `{`.');
     } else if (kc === 47 && !tolerant) {
-      return fail(i, 'Comments are not allowed in JSON. Turn on Tolerant mode to allow them.');
+      return fail(i, 'Comments are not allowed in JSON. To allow them, open Options and turn on "Allow comments and trailing commas".');
     } else {
       return fail(i, 'Keys need double quotes.');
     }
@@ -451,7 +451,7 @@ export function parse(text, opts = {}) {
         return fail(i, 'A comma is missing between items.');
       }
       if (ch === 58) return fail(i, 'This colon is not expected here. Check the key before it.');
-      if (ch === 47 && !tolerant) return fail(i, 'Comments are not allowed in JSON. Turn on Tolerant mode to allow them.');
+      if (ch === 47 && !tolerant) return fail(i, 'Comments are not allowed in JSON. To allow them, open Options and turn on "Allow comments and trailing commas".');
       return fail(i, `Unexpected ${showChar(chs)}. A comma or a closing bracket is expected here.`);
     }
   }
@@ -460,7 +460,7 @@ export function parse(text, opts = {}) {
   if (e) return e;
   if (i < n) {
     const ch = text.charAt(i);
-    if (ch === '/' && !tolerant) return fail(i, 'Comments are not allowed in JSON. Turn on Tolerant mode to allow them.');
+    if (ch === '/' && !tolerant) return fail(i, 'Comments are not allowed in JSON. To allow them, open Options and turn on "Allow comments and trailing commas".');
     return fail(i, `Unexpected ${showChar(ch)} after the end of the JSON. A document holds one value.`);
   }
   return { ok: true, value: root, warnings, dupCount };

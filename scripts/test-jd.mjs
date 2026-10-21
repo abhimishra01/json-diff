@@ -239,7 +239,7 @@ expectErr('E7', '{"a":NaN}', 1, 6, '`NaN` is not valid JSON. Use a string or nul
 expectErr('E8', '{a:1}', 1, 2, 'Keys need double quotes.');
 expectErr('E9', '{"a":1 "b":2}', 1, 8, 'A comma is missing between items.');
 expectErr('E10', '{\n  "a": 1,\n  "b": [1,2,,]\n}', 3, 13, 'Two commas in a row. A value is missing.');
-expectErr('E11', '// comment\n{}', 1, 1, 'Comments are not allowed in JSON. Turn on Tolerant mode to allow them.');
+expectErr('E11', '// comment\n{}', 1, 1, 'Comments are not allowed in JSON. To allow them, open Options and turn on "Allow comments and trailing commas".');
 expectErr('E12', '{"a":"x\ty"}', 1, 8, 'A tab inside a string must be written as `\\t`.');
 expectErr('E13', '{"a":"\\x"}', 1, 7, 'Unknown escape `\\x`.');
 expectErr('E14', '{"a":"abc', 1, 6, 'This string is not closed.');
@@ -260,6 +260,14 @@ eq(parse('﻿{"a":1}').ok, true, 'E16');
   eq([r2.state, r2.changes.length], ['ok', 1], 'E18 one change 10,000 deep');
   eq(compact(parse(deep2).value, 50).length > 0, true, 'compact on deep input');
   eq(pretty(parse(deep2).value).lines.length, 20001, 'pretty on deep input');
+}
+// QA: empty containers print once (they used to repeat until the length limit)
+{
+  eq(compact(parse('[]').value), '[]', 'compact empty array');
+  eq(compact(parse('{}').value), '{}', 'compact empty object');
+  eq(compact(parse('{"a":[],"b":{},"c":[[],{}],"d":1}').value), '{"a":[],"b":{},"c":[[],{}],"d":1}', 'compact nested empties');
+  const r = cmp('{"a":[]}', '{"a":{}}');
+  eq([r.changes[0].a, r.changes[0].b], ['[]', '{}'], 'J5 shows [] and {}');
 }
 // more error shapes
 expectErr('mismatch value', '{"a":[}', 1, 7, 'This `}` does not match. The open bracket is `[`.');

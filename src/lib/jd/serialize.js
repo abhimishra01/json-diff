@@ -22,8 +22,10 @@ export function compact(v, limit = 1000) {
     if (cur instanceof Map || Array.isArray(cur)) {
       const obj = cur instanceof Map;
       const size = obj ? cur.size : cur.length;
-      if (size === 0) out += obj ? '{}' : '[]';
-      else {
+      if (size === 0) {
+        out += obj ? '{}' : '[]';
+        cur = undefined;
+      } else {
         out += obj ? '{' : '[';
         stack.push({ obj, it: obj ? cur.entries() : null, arr: obj ? null : cur, i: 0, size, first: true });
         cur = undefined;

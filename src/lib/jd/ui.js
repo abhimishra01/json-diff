@@ -1,6 +1,6 @@
 // Page logic for the JSON diff tool. The heavy work runs in worker.js.
 import { diffChars, diffWordsWithSpace } from 'diff';
-import { cleanOptions, defaultOptions } from './normalize.js';
+import { cleanOptions, defaultOptions, toleranceValue } from './normalize.js';
 import { compileIgnore } from './paths.js';
 import { locate, reportText, changeLabel } from './report.js';
 import { lineCol } from './parse.js';
@@ -69,7 +69,7 @@ export function initTool() {
     ignore: $('jd-ignore'), ignoreErr: $('jd-ignore-err'),
     numMode: root.querySelectorAll('input[name="jd-nummode"]'), abs: $('jd-abs'), rel: $('jd-rel'),
     sIgnoreCase: $('jd-s-case'), sTrim: $('jd-s-trim'), sCollapse: $('jd-s-collapse'), sNfc: $('jd-s-nfc'),
-    sortKeys: $('jd-sortkeys'), tolerant: $('jd-tolerant'),
+    sortKeys: $('jd-sortkeys'), tolerant: $('jd-tolerant'), tolErr: $('jd-tol-err'),
     live: $('jd-live'), empty: $('jd-empty'), msg: $('jd-msg'), res: $('jd-res'),
     sumText: $('jd-sum-text'), filters: $('jd-filters'), info: $('jd-info'),
     list: $('jd-list'), listNote: $('jd-list-note'), more: $('jd-more'),
@@ -153,6 +153,7 @@ export function initTool() {
     el.tolerant.checked = o.tolerant;
     renderChips();
     renderIgnoreErrors();
+    renderToleranceErrors();
   }
   function formToOpts() {
     const o = S.opts;
@@ -175,8 +176,21 @@ export function initTool() {
       return;
     }
     el.ignoreErr.hidden = false;
-    el.ignoreErr.innerHTML = errors.slice(0, 5).map((e) => `<span>Line ${e.line}: ${esc(e.message)}</span>`).join('');
+    el.ignoreErr.innerHTML = errors.slice(0, 5).map((e) => `<span>Line ${e.line}: ${esc(e.message).replace(/`([^`]+)`/g, '<code>$1</code>')}</span>`).join('');
     el.ignore.setAttribute('aria-invalid', 'true');
+  }
+
+  // A tolerance that is not a number above 0 does nothing. Say so instead of leaving it silent.
+  function renderToleranceErrors() {
+    const bad = [];
+    for (const [input, name] of [[el.abs, 'The difference'], [el.rel, 'The percent']]) {
+      const t = input.value.trim();
+      const n = Number(t.replace(',', '.'));
+      const wrong = t !== '' && !(Number.isFinite(n) && n >= 0);
+      if (wrong) { bad.push(name); input.setAttribute('aria-invalid', 'true'); } else input.removeAttribute('aria-invalid');
+    }
+    el.tolErr.hidden = bad.length === 0;
+    el.tolErr.textContent = bad.length ? `${bad.join(' and ')} must be a number, for example 0.01. It is ignored for now.` : '';
   }
 
   // Chips: one per active option. A chip is a button that switches that option off.
@@ -193,8 +207,8 @@ export function initTool() {
     const pats = compileIgnore(o.ignore).patterns.length;
     if (pats) chips.push({ text: `Ignore paths: ${pats}`, off: off(() => { o.ignore = ''; }) });
     if (o.numbers.mode === 'written') chips.push({ text: 'Numbers as written', off: off(() => { o.numbers.mode = 'value'; }) });
-    if (o.numbers.mode === 'value' && o.numbers.abs) chips.push({ text: `Tolerance ±${o.numbers.abs}`, off: off(() => { o.numbers.abs = ''; }) });
-    if (o.numbers.mode === 'value' && o.numbers.rel) chips.push({ text: `Tolerance ${o.numbers.rel}%`, off: off(() => { o.numbers.rel = ''; }) });
+    if (o.numbers.mode === 'value' && toleranceValue(o.numbers.abs)) chips.push({ text: `Tolerance ±${o.numbers.abs}`, off: off(() => { o.numbers.abs = ''; }) });
+    if (o.numbers.mode === 'value' && toleranceValue(o.numbers.rel)) chips.push({ text: `Tolerance ${o.numbers.rel}%`, off: off(() => { o.numbers.rel = ''; }) });
     if (o.strings.ignoreCase) chips.push({ text: 'Ignore case', off: off(() => { o.strings.ignoreCase = false; }) });
     if (o.strings.trim) chips.push({ text: 'Trim text', off: off(() => { o.strings.trim = false; }) });
     if (o.strings.collapse) chips.push({ text: 'Collapse spaces', off: off(() => { o.strings.collapse = false; }) });
@@ -1135,7 +1149,7 @@ export function initTool() {
   for (const x of [...el.numMode, el.sIgnoreCase, el.sTrim, el.sCollapse, el.sNfc, el.tolerant]) {
     x.addEventListener('change', () => { formToOpts(); optsToForm(); requestCompare(0); });
   }
-  for (const x of [el.abs, el.rel]) x.addEventListener('input', () => { formToOpts(); renderChips(); requestCompare(LIVE_DELAY); });
+  for (const x of [el.abs, el.rel]) x.addEventListener('input', () => { formToOpts(); renderChips(); renderToleranceErrors(); requestCompare(LIVE_DELAY); });
   el.sortKeys.addEventListener('change', () => {
     S.opts.sortKeys = el.sortKeys.checked;
     saveOptions();
