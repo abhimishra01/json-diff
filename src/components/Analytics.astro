@@ -1,0 +1,8 @@
+---
+import site from '../site.config.ts';
+const ga = site.ga4.trim();
+const ads = site.adsense.trim();
+---
+{ga && <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${ga}`}></script>}
+{ga && <script is:inline define:vars={{ ga }}>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config',ga);</script>}
+{ads && <script is:inline async crossorigin="anonymous" src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ads}`}></script>}

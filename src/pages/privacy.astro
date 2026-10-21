@@ -1,0 +1,27 @@
+---
+import Page from '../layouts/Page.astro';
+import site from '../site.config.ts';
+const updated = 'October 20, 2026';
+---
+<Page title="Privacy Policy" description="How JSON Diff Checker handles your data, cookies and ads. The JSON you paste stays in your browser, and we do not ask you to sign up or create an account.">
+  <p>Last updated: {updated}</p>
+  <p>This policy explains what {site.name} ({site.domain}) collects and why.</p>
+  <h2>What the tool does with your input</h2>
+  <p>The tool runs in your browser. The JSON you paste or open is read and compared on your device, in a background worker. The page does not send it to our servers or to anyone else. You can check this in the Network tab of your browser tools.</p>
+  <h2>Information we collect</h2>
+  <p>We do not ask you to create an account. We do not collect names or email addresses, unless you email us. If you do, we use your address only to reply.</p>
+  <h2>Cookies and Google Analytics</h2>
+  <p>We may use Google Analytics to count visits and see which pages people use. Google Analytics sets cookies and collects data such as your IP address, browser, device and pages viewed. We use this data in aggregate to improve the site. Learn how Google uses data in its <a href="https://policies.google.com/technologies/partner-sites" rel="noopener">"How Google uses information from sites or apps that use our services"</a> page. You can block the tracking with the <a href="https://tools.google.com/dlpage/gaoptout" rel="noopener">Google Analytics opt-out add-on</a>.</p>
+  <h2>Advertising and third-party vendors</h2>
+  <p>We may show ads from Google AdSense and other third-party vendors. Third-party vendors, including Google, use cookies to serve ads based on your earlier visits to this and other websites. Google's use of advertising cookies lets it and its partners serve ads to you based on your visit to our site and other sites on the internet.</p>
+  <p>You can opt out of personalized advertising in <a href="https://adssettings.google.com" rel="noopener">Google Ads Settings</a>. You can also visit <a href="https://www.aboutads.info" rel="noopener">aboutads.info</a> to opt out of some third-party vendors' use of cookies for personalized advertising.</p>
+  <p>When ads or analytics are on, consent is shown through Google's consent message. You can also change your choice in your browser settings or by clearing cookies. This site has no cookie banner of its own.</p>
+  <h2>Your browser's local storage</h2>
+  <p>The site saves two things in your browser: your light or dark theme choice, and the options you set in the tool (for example how to match arrays and which paths to ignore). This stays on your device. We cannot see it. We do not save the JSON you paste. Clear your browser data to remove the saved choices, or use Reset all options.</p>
+  <h2>Children</h2>
+  <p>The site is not aimed at children under 13. We do not knowingly collect their data.</p>
+  <h2>Your rights</h2>
+  <p>Depending on where you live, you may have the right to ask what data we hold, and to ask us to correct or delete it. Write to <a href={site.contactHref}>{site.contactLabel}</a>.</p>
+  <h2>Changes</h2>
+  <p>We may update this policy. The date above shows the latest update.</p>
+</Page>

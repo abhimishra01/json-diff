@@ -1,0 +1,22 @@
+---
+import Page from '../layouts/Page.astro';
+import site from '../site.config.ts';
+import { url } from '../lib/url.ts';
+const updated = 'October 20, 2026';
+---
+<Page noindex title="Terms of Use" description="Terms of use for JSON Diff Checker, a free JSON compare tool. Read the rules for using it and what we do and do not promise about its results.">
+  <p>Last updated: {updated}</p>
+  <p>By using {site.name} at {site.domain} you agree to these terms. If you do not agree, please do not use the site.</p>
+  <h2>Use of the tool</h2>
+  <p>The tool is free for personal and commercial use. Do not misuse the site, try to break it, or send automated bulk requests.</p>
+  <h2>No warranty</h2>
+  <p>We provide the site "as is". We work to make results correct, but we give no guarantee. Check important results yourself, and do not rely on this tool alone for decisions about money, safety or the law. We are not liable for any loss that comes from using the site.</p>
+  <h2>Content and ownership</h2>
+  <p>The design, text and code of this site belong to {site.owner}. You keep ownership of anything you enter into the tool.</p>
+  <h2>Third-party services</h2>
+  <p>The site may show ads and use analytics from third parties. Their own terms apply. See our <a href={url('/privacy/')}>Privacy Policy</a>.</p>
+  <h2>Changes</h2>
+  <p>We may change the site or these terms at any time. The date above shows the latest update.</p>
+  <h2>Contact</h2>
+  <p><a href={site.contactHref}>{site.contactLabel}</a></p>
+</Page>

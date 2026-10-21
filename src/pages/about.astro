@@ -1,0 +1,19 @@
+---
+import Page from '../layouts/Page.astro';
+import site from '../site.config.ts';
+import { url } from '../lib/url.ts';
+---
+<Page title="About" description="About JSON Diff Checker, a free tool that compares two JSON documents in your browser and lists every change by path. See what it does and how it works.">
+  <p>{site.name} is a free tool that compares two JSON documents. It lists every change with its path, the old value and the new value. It ignores key order and spacing, so you only see real changes.</p>
+  <h2>Who it is for</h2>
+  <p>Developers, testers, data analysts and anyone who works with APIs, config files or exports. It works on a phone or a computer.</p>
+  <h2>How to use it</h2>
+  <p>Paste the first JSON into Original and the second into Changed. The result updates while you type. Use Options to match array items by a key such as id, to ignore fields like updatedAt, and to set rules for numbers and text.</p>
+  <h2>How it works</h2>
+  <p>The comparison runs in your browser, in a background worker. Numbers are compared by exact value, so large ids are never rounded. The page does not send your JSON to a server. We do not ask you to create an account. The tool saves your option choices on your own device. It does not save your documents.</p>
+  <h2>Who made this</h2>
+  <p>This tool was built by <a href="https://bingemind.com/abhishek-mishra/">Abhishek Mishra</a>, a software development engineer (SDE) at Oqu AI, and is published by Bingemind.</p>
+  <p>Phone and WhatsApp: <a href="tel:+916376068337">+91 63760 68337</a> (<a href="https://wa.me/916376068337" rel="noopener">message on WhatsApp</a>).</p>
+  <h2>Contact</h2>
+  <p>Questions or ideas? Write to <a href={site.contactHref}>{site.contactLabel}</a> or visit the <a href={url('/contact/')}>Contact page</a>.</p>
+</Page>

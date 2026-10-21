@@ -1,0 +1,31 @@
+{
+  "name": "json-diff",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev --port 4961",
+    "build": "astro build",
+    "test": "node scripts/test-jd.mjs",
+    "test:perf": "node scripts/test-perf.mjs",
+    "test:network": "node scripts/test-network.mjs",
+    "preview": "astro preview --port 4962",
+    "build:bingemind": "npm test && SITE_MODE=bingemind astro build",
+    "deploy": "npm test && npm run build && node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/deploy.mjs"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.4",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.3.8",
+    "diff": "9.0.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "axe-core": "^4.14.0",
+    "playwright-core": "^1.64.1",
+    "wrangler": "^4.151.2"
+  },
+  "engines": {
+    "node": ">=22.6"
+  }
+}

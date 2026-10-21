@@ -1,0 +1,15 @@
+---
+// "More free tools" block: 3 related tools plus the hub link. Plain links, no JS.
+const tools = [
+  { href: 'https://bingemind.com/markdown-to-pdf/', label: 'Markdown to PDF' },
+  { href: 'https://bingemind.com/column-to-comma/', label: 'Column to comma converter' },
+  { href: 'https://bingemind.com/dpi-changer/', label: 'DPI changer' },
+];
+---
+<section aria-labelledby="more-tools-h" class="mx-auto max-w-5xl px-4 pt-16">
+  <h2 id="more-tools-h" class="text-xl font-bold tracking-tight">More free tools from Bingemind</h2>
+  <ul class="mt-3 flex flex-col gap-x-8 sm:flex-row sm:flex-wrap">
+    {tools.map((t) => <li><a href={t.href} class="inline-block py-2 font-medium text-brand-ink underline underline-offset-4">{t.label}</a></li>)}
+    <li><a href="https://bingemind.com/tools/" class="inline-block py-2 font-medium text-brand-ink underline underline-offset-4">See all free tools</a></li>
+  </ul>
+</section>

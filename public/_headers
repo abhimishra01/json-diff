@@ -1,0 +1,15 @@
+# Cloudflare Pages. Keep the *.pages.dev address out of Google (duplicate content).
+# ":project" is a placeholder that matches any project name; this rule only matches the pages.dev host
+# never your custom domain. The second rule covers preview and branch addresses (abc123.name.pages.dev).
+https://:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+https://:version.:project.pages.dev/*
+  X-Robots-Tag: noindex
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable

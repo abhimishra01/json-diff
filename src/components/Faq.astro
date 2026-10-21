@@ -1,0 +1,17 @@
+---
+import { faq } from '../data/faq.ts';
+---
+<section aria-labelledby="faq-h" class="mx-auto max-w-5xl px-4 pt-16">
+  <h2 id="faq-h" class="text-2xl font-bold tracking-tight">Frequently asked questions</h2>
+  <div class="mt-6 max-w-3xl divide-y divide-line border-y border-line">
+    {faq.map((f) => (
+      <details class="group py-4">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold [&::-webkit-details-marker]:hidden">
+          {f.q}
+          <svg class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-45" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 2v12M2 8h12"/></svg>
+        </summary>
+        <p class="mt-2 text-muted">{f.a}</p>
+      </details>
+    ))}
+  </div>
+</section>

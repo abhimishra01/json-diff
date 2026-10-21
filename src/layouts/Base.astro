@@ -1,0 +1,65 @@
+---
+import '../styles/global.css';
+import site from '../site.config.ts';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import MoreTools from '../components/MoreTools.astro';
+import Analytics from '../components/Analytics.astro';
+import { url, stripBase } from '../lib/url.ts';
+
+interface Props { fullTitle?: string; title?: string; description?: string; jsonLd?: object[]; noindex?: boolean; }
+const { fullTitle: titleOverride, title, description = site.description, jsonLd = [], noindex = false } = Astro.props;
+// The GitHub Pages copy is a preview: keep it out of search results. Normal builds stay indexable.
+const isPreview = import.meta.env.BASE_URL.replace(/\/+$/, "") !== "";
+// Search results cut titles near 60 characters, so the site name is added only when it fits.
+const suffixed = (t: string) => (t.length + site.name.length + 3 <= 60 ? `${t} | ${site.name}` : t);
+const fullTitle = titleOverride ?? (title ? suffixed(title) : `${site.name}: ${site.keyword}`);
+const base = site.origin;
+// Canonical always names the real domain, even when the site is served from a base path.
+const canonical = base + stripBase(Astro.url.pathname);
+// The share image must load from wherever this build is served.
+const image = site.ogImage ? new URL(url(site.ogImage), Astro.site).href : '';
+---
+<!doctype html>
+<html lang={site.locale} data-theme="light" style={`--brand:${site.brand}`}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline>
+      // Runs before paint: no theme flash. Saved choice wins, else the system setting.
+      (function(){var t;try{t=localStorage.getItem('theme')}catch(e){}
+      if(t!=='light'&&t!=='dark'){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}
+      document.documentElement.dataset.theme=t})();
+    </script>
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content={site.brand} />
+    {noindex || (isPreview && !site.bingemind) ? <meta name="robots" content="noindex, follow" /> : site.bingemind && <meta name="robots" content="index,follow" />}
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={url('favicon.svg')} type="image/svg+xml" />
+    <link rel="icon" href={url('favicon-32.png')} type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href={url('apple-touch-icon.png')} />
+    <link rel="manifest" href={url('site.webmanifest')} />
+    <link rel="sitemap" href={url('sitemap-index.xml')} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={site.name} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={site.locale.replace('-', '_')} />
+    {image && <meta property="og:image" content={image} />}
+    <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    {image && <meta name="twitter:image" content={image} />}
+    {jsonLd.map((d) => <script type="application/ld+json" set:html={JSON.stringify(d).replace(/</g, '\\u003c')} />)}
+    <Analytics />
+  </head>
+  <body class="min-h-screen antialiased">
+    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-30 focus:rounded-lg focus:bg-card focus:px-3 focus:py-2">Skip to content</a>
+    <Header />
+    <main id="main"><slot /></main>
+    <MoreTools />
+    <Footer />
+  </body>
+</html>

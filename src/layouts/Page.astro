@@ -1,0 +1,12 @@
+---
+// Simple text page (About, Contact, Privacy, Terms).
+import Base from './Base.astro';
+interface Props { title: string; description?: string; noindex?: boolean; }
+const { title, description, noindex = false } = Astro.props;
+---
+<Base title={title} description={description} noindex={noindex}>
+  <div class="mx-auto max-w-5xl px-4 pt-12 sm:pt-16">
+    <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
+    <div class="prose-site mt-6"><slot /></div>
+  </div>
+</Base>

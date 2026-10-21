@@ -1,0 +1,175 @@
+---
+// The JSON diff tool. Markup only; the logic is in src/lib/jd/ui.js and the worker.
+// The section has a fixed minimum height from the first paint, so the page does not jump.
+const panes = [
+  { side: 'a', title: 'Original' },
+  { side: 'b', title: 'Changed' },
+];
+---
+<section id="tool" class="jd" aria-label="JSON diff tool">
+  <div class="jd-bar" role="group" aria-label="Actions">
+    <button type="button" id="jd-sample" class="btn">Sample</button>
+    <button type="button" id="jd-swap" class="btn">Swap</button>
+    <button type="button" id="jd-clear" class="btn">Clear</button>
+    <span class="jd-sep" aria-hidden="true"></span>
+    <label class="jd-field" for="jd-arrays">Arrays
+      <select id="jd-arrays" class="ctl">
+        <option value="auto">Auto</option>
+        <option value="position">By position</option>
+        <option value="key">By key</option>
+        <option value="order">Ignore order</option>
+      </select>
+    </label>
+    <label class="jd-field" id="jd-keywrap" for="jd-key" hidden>Key
+      <input id="jd-key" class="ctl" type="text" placeholder="id" autocomplete="off" autocapitalize="off" spellcheck="false" size="10" />
+    </label>
+    <button type="button" id="jd-options-btn" class="btn" aria-expanded="false" aria-controls="jd-options"><span>Options</span></button>
+    <button type="button" id="jd-compare" class="btn btn-primary" title="Compare now (Ctrl or Cmd + Enter)">Compare</button>
+  </div>
+
+  <div id="jd-options" class="jd-options" hidden>
+    <fieldset class="jd-set jd-set-wide">
+      <legend>Ignore paths</legend>
+      <label for="jd-ignore" class="sr-only">Paths to ignore, one per line</label>
+      <textarea id="jd-ignore" class="ctl mono" rows="4" placeholder="**.updatedAt&#10;items[*].id&#10;$.meta.requestId" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <p class="hint">One pattern per line. <code>**.name</code> matches at any depth, <code>[*]</code> matches any array item. Lines that start with <code>#</code> are notes.</p>
+      <div id="jd-ignore-err" class="jd-field-err" role="alert" hidden></div>
+    </fieldset>
+    <fieldset class="jd-set">
+      <legend>Numbers</legend>
+      <label class="jd-check"><input type="radio" name="jd-nummode" value="value" checked /> By value (1.0 equals 1)</label>
+      <label class="jd-check"><input type="radio" name="jd-nummode" value="written" /> As written (1.0 differs from 1)</label>
+      <div class="jd-tol">
+        <label for="jd-abs">Allow a difference of</label>
+        <input id="jd-abs" class="ctl" type="text" inputmode="decimal" placeholder="0" autocomplete="off" size="6" />
+        <label for="jd-rel">or</label>
+        <input id="jd-rel" class="ctl" type="text" inputmode="decimal" placeholder="0" autocomplete="off" size="6" /><span>%</span>
+      </div>
+    </fieldset>
+    <fieldset class="jd-set">
+      <legend>Text values</legend>
+      <label class="jd-check"><input type="checkbox" id="jd-s-case" /> Ignore case</label>
+      <label class="jd-check"><input type="checkbox" id="jd-s-trim" /> Trim the ends</label>
+      <label class="jd-check"><input type="checkbox" id="jd-s-collapse" /> Collapse inner spaces</label>
+      <label class="jd-check"><input type="checkbox" id="jd-s-nfc" /> Normalize Unicode (NFC)</label>
+    </fieldset>
+    <fieldset class="jd-set">
+      <legend>View and reading</legend>
+      <label class="jd-check"><input type="checkbox" id="jd-sortkeys" /> Sort keys in side by side</label>
+      <label class="jd-check"><input type="checkbox" id="jd-tolerant" /> Allow comments and trailing commas (not strict JSON)</label>
+      <button type="button" id="jd-reset-opts" class="btn-sm">Reset all options</button>
+    </fieldset>
+  </div>
+
+  <ul id="jd-chips" class="jd-chips" aria-label="Options that are on" hidden></ul>
+
+  <div class="jd-panes">
+    {panes.map((p) => (
+      <div class="jd-pane" id={`jd-pane-${p.side}`}>
+        <div class="jd-pane-head">
+          <h2 class="jd-pane-title" id={`jd-title-${p.side}`}>{p.title}</h2>
+          <span class="jd-status" id={`jd-st-${p.side}`} data-state="empty">Empty</span>
+          <div class="jd-pane-acts">
+            <button type="button" class="btn-sm" data-act="open">Open file</button>
+            <button type="button" class="btn-sm" data-act="format">Format</button>
+            <button type="button" class="btn-sm" data-act="copy">Copy</button>
+            <button type="button" class="btn-sm" data-act="collapse" aria-expanded="true" aria-controls={`jd-body-${p.side}`}>Hide</button>
+          </div>
+          <input type="file" class="sr-only" tabindex="-1" aria-label={`Open a JSON file for ${p.title}`} accept=".json,.jsonl,.txt,application/json,text/plain" />
+        </div>
+        <div class="jd-body" id={`jd-body-${p.side}`}>
+          <div class="jd-big" id={`jd-big-${p.side}`} hidden>
+            <span id={`jd-bigtext-${p.side}`}></span>
+            <button type="button" class="btn-sm" data-big="edit">Edit as text</button>
+            <button type="button" class="btn-sm" data-big="clear">Clear</button>
+          </div>
+          <div class="jd-editor">
+            <pre class="jd-gutter" id={`jd-gut-${p.side}`} aria-hidden="true">1</pre>
+            <div class="jd-errline" id={`jd-errline-${p.side}`} hidden aria-hidden="true"></div>
+            <textarea id={`jd-in-${p.side}`} class="jd-ta" aria-labelledby={`jd-title-${p.side}`} wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="Paste JSON here, or drop a file"></textarea>
+          </div>
+          <div class="jd-error" id={`jd-err-${p.side}`} role="alert" hidden></div>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <section class="jd-result" id="jd-result" aria-labelledby="jd-result-h">
+    <h2 id="jd-result-h" class="sr-only">Result</h2>
+    <div id="jd-live" class="sr-only" role="status" aria-live="polite"></div>
+    <div id="jd-progress" class="jd-progress" hidden>
+      <progress id="jd-progbar" max="1"></progress>
+      <span id="jd-progtext">Working</span>
+      <button type="button" id="jd-cancel" class="btn-sm">Cancel</button>
+    </div>
+    <div id="jd-empty" class="jd-empty">
+      <ol class="jd-steps">
+        <li><strong>Paste</strong> the first JSON on the left.</li>
+        <li><strong>Paste</strong> the second JSON on the right.</li>
+        <li><strong>Read</strong> the list of changes, with a path for each one.</li>
+      </ol>
+      <p><button type="button" class="btn" data-act="sample-empty">Load a sample</button></p>
+    </div>
+    <p id="jd-msg" class="jd-msg" hidden></p>
+    <div id="jd-res" hidden>
+      <div class="jd-summary">
+        <p id="jd-sum-text" class="jd-sum-text"></p>
+        <div id="jd-filters" class="jd-filters" role="group" aria-label="Show only"></div>
+        <div class="jd-sum-acts">
+          <button type="button" id="jd-copy-report" class="btn-sm">Copy report</button>
+          <button type="button" id="jd-download" class="btn-sm">Download .txt</button>
+          <button type="button" id="jd-copy-patch" class="btn-sm" title="JSON Patch (RFC 6902)">Copy JSON Patch</button>
+        </div>
+      </div>
+      <p id="jd-patch-note" class="hint" hidden></p>
+      <div id="jd-info" class="jd-info"></div>
+      <div class="jd-tabs-wrap">
+        <div class="jd-tabs" role="tablist" aria-label="Result view">
+          <button type="button" role="tab" id="jd-tab-list" aria-selected="true" aria-controls="jd-panel-list">Changes</button>
+          <button type="button" role="tab" id="jd-tab-sbs" aria-selected="false" aria-controls="jd-panel-sbs" tabindex="-1">Side by side</button>
+        </div>
+      </div>
+      <div role="tabpanel" id="jd-panel-list" aria-labelledby="jd-tab-list">
+        <ol id="jd-list" class="jd-list"></ol>
+        <p id="jd-list-note" class="hint" hidden></p>
+        <button type="button" id="jd-more" class="btn" hidden>Show more</button>
+        <div id="jd-sentinel" aria-hidden="true"></div>
+      </div>
+      <div role="tabpanel" id="jd-panel-sbs" aria-labelledby="jd-tab-sbs" hidden>
+        <div class="jd-sbs-bar">
+          <button type="button" id="jd-prev" class="btn-sm" aria-keyshortcuts="p">Previous change</button>
+          <button type="button" id="jd-next" class="btn-sm" aria-keyshortcuts="n">Next change</button>
+          <label class="jd-check"><input type="checkbox" id="jd-sortkeys2" /> Sort keys</label>
+          <span id="jd-cur" class="jd-cur" aria-live="polite"></span>
+        </div>
+        <div class="jd-sbs-switch" role="group" aria-label="Show one document">
+          <button type="button" class="btn-sm" data-sbs="a" aria-pressed="true">Before</button>
+          <button type="button" class="btn-sm" data-sbs="b" aria-pressed="false">After</button>
+        </div>
+        <p id="jd-sbs-note" class="hint"></p>
+        <div class="jd-sbs" id="jd-sbs">
+          <div class="jd-sbs-col" data-col="a">
+            <h3 class="jd-sbs-title">Original</h3>
+            <div class="jd-sv" id="jd-sv-a" tabindex="0" role="region" aria-label="Original, formatted"><div class="jd-sz" id="jd-sz-a"><div class="jd-sw" id="jd-sw-a"></div></div></div>
+          </div>
+          <div class="jd-sbs-col" data-col="b" data-hide="true">
+            <h3 class="jd-sbs-title">Changed</h3>
+            <div class="jd-sv" id="jd-sv-b" tabindex="0" role="region" aria-label="Changed, formatted"><div class="jd-sz" id="jd-sz-b"><div class="jd-sw" id="jd-sw-b"></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="jd-toast" class="jd-toast" role="status" hidden></div>
+  <div id="jd-phonebar" class="jd-phonebar" role="group" aria-label="Switch view">
+    <button type="button" data-go="edit">Edit</button>
+    <button type="button" data-go="result">Result</button>
+    <button type="button" id="jd-compare-bar" class="go">Compare</button>
+  </div>
+</section>
+
+<script>
+  import { initTool } from '../lib/jd/ui.js';
+  initTool();
+</script>

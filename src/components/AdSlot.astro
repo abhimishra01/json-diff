@@ -1,0 +1,11 @@
+---
+// Renders nothing until an AdSense ID is set in site.config.ts.
+import site from '../site.config.ts';
+const ads = site.adsense.trim();
+---
+{ads && (
+  <aside class="ad-slot no-print" aria-label="Advertisement">
+    <ins class="adsbygoogle" style="display:block" data-ad-client={ads} data-ad-format="auto" data-full-width-responsive="true"></ins>
+    <script is:inline>(window.adsbygoogle=window.adsbygoogle||[]).push({});</script>
+  </aside>
+)}

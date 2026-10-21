@@ -1,0 +1,21 @@
+---
+import site from '../site.config.ts';
+import { url } from '../lib/url.ts';
+const year = new Date().getFullYear();
+const links = [
+  { href: '/about/', label: 'About' },
+  { href: '/contact/', label: 'Contact' },
+  { href: '/privacy/', label: 'Privacy Policy' },
+  { href: '/terms/', label: 'Terms' },
+];
+---
+<footer class="mt-24 max-lg:pb-14 border-t border-line">
+  <div class="mx-auto flex max-w-5xl flex-col gap-6 px-4 pt-10 pb-4 sm:flex-row sm:items-center sm:justify-between">
+    <p class="text-sm text-muted">&copy; {year} {site.name}. Free to use.</p>
+    <nav aria-label="Footer" class="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+      {links.map((l) => <a href={url(l.href)} class="text-muted underline-offset-4 hover:text-ink hover:underline">{l.label}</a>)}
+    {site.bingemind && <a href="https://bingemind.com/tools/" class="inline-block py-2 text-muted underline-offset-4 hover:text-ink hover:underline">More free tools</a>}
+    </nav>
+  </div>
+  <p class="mx-auto max-w-5xl px-4 pb-10 text-sm text-muted">Made by <a href="https://bingemind.com/abhishek-mishra/" class="underline underline-offset-4 hover:text-ink">Abhishek Mishra</a>, SDE @ Oqu AI. Made with love by <a href="https://bingemind.com/" class="underline underline-offset-4 hover:text-ink">Bingemind</a>.</p>
+</footer>
